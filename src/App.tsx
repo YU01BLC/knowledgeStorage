@@ -1,35 +1,34 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/electron-vite.animate.svg'
-import './App.css'
+import { useMemo, useState } from 'react';
+import { ThemeProvider, CssBaseline } from '@mui/material';
+import { ColorModeContext } from './theme/ColorModeContext';
+import { getTheme } from './theme/theme';
+import { AppLayout } from './ui/layout/AppLayout';
+import { Header } from './ui/header/Header';
+import { knowledgeMock } from './mock/knowledge.mock';
+import { KnowledgeCardList } from './ui/card/KnowledgeCardList';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [mode, setMode] = useState<'light' | 'dark'>('dark');
+
+  const colorMode = useMemo(
+    () => ({
+      toggleColorMode: () => {
+        setMode((prev) => (prev === 'light' ? 'dark' : 'light'));
+      },
+    }),
+    []
+  );
+
+  const theme = useMemo(() => getTheme(mode), [mode]);
 
   return (
-    <>
-      <div>
-        <a href="https://electron-vite.github.io" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <ColorModeContext.Provider value={colorMode}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <AppLayout header={<Header />}>
+          <KnowledgeCardList items={knowledgeMock} />
+        </AppLayout>
+      </ThemeProvider>
+    </ColorModeContext.Provider>
+  );
 }
-
-export default App

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { z } from 'zod';
 import { Card, CardSchema, Label, LabelSchema } from '../domain/schema';
 import {
   CreateCardInput,
@@ -7,6 +8,30 @@ import {
   UpdateCardInputSchema,
 } from '../domain/inputSchema';
 import { generateId } from '../domain/id';
+import { generateUniqueLabelColor } from '../ui/label/generateUniqueLabelColor';
+import {
+  loadLabels,
+  saveLabels,
+  loadCards,
+  saveCards,
+} from '../domain/storage';
+
+/**
+ * =========================
+ * restore helpers
+ * =========================
+ */
+const restoreLabels = (): Label[] => {
+  const raw = loadLabels();
+  const parsed = z.array(LabelSchema).safeParse(raw);
+  return parsed.success ? parsed.data : [];
+};
+
+const restoreCards = (): Card[] => {
+  const raw = loadCards();
+  const parsed = z.array(CardSchema).safeParse(raw);
+  return parsed.success ? parsed.data : [];
+};
 
 /**
  * =========================
@@ -27,7 +52,7 @@ type DomainState = {
   /**
    * Label CRUD
    */
-  addLabel: (label: Label) => void;
+  addLabel: (label: Omit<Label, 'color'> & { color?: string }) => void;
   updateLabel: (label: Label) => void;
   deleteLabel: (labelId: string) => void;
 };
@@ -38,8 +63,8 @@ type DomainState = {
  * =========================
  */
 export const useDomainStore = create<DomainState>((set) => ({
-  cards: [],
-  labels: [],
+  cards: restoreCards(),
+  labels: restoreLabels(),
 
   /**
    * -------- Card --------
@@ -68,9 +93,11 @@ export const useDomainStore = create<DomainState>((set) => ({
       return;
     }
 
-    set((state) => ({
-      cards: [...state.cards, validated.data],
-    }));
+    set((state) => {
+      const next = [...state.cards, validated.data];
+      saveCards(next);
+      return { cards: next };
+    });
   },
 
   updateCard: (input) => {
@@ -80,8 +107,8 @@ export const useDomainStore = create<DomainState>((set) => ({
       return;
     }
 
-    set((state) => ({
-      cards: state.cards.map((card) =>
+    set((state) => {
+      const next = state.cards.map((card) =>
         card.id === parsed.data.id
           ? {
               ...card,
@@ -89,29 +116,44 @@ export const useDomainStore = create<DomainState>((set) => ({
               updatedAt: Date.now(),
             }
           : card
-      ),
-    }));
+      );
+      saveCards(next);
+      return { cards: next };
+    });
   },
 
   deleteCard: (cardId) =>
-    set((state) => ({
-      cards: state.cards.filter((card) => card.id !== cardId),
-    })),
+    set((state) => {
+      const next = state.cards.filter((card) => card.id !== cardId);
+      saveCards(next);
+      return { cards: next };
+    }),
 
   /**
    * -------- Label --------
    */
-  addLabel: (label) => {
-    const parsed = LabelSchema.safeParse(label);
-    if (!parsed.success) {
-      console.error(parsed.error);
-      return;
-    }
+  addLabel: (label) =>
+    set((state) => {
+      const color =
+        label.color ?? generateUniqueLabelColor(state.labels.length);
 
-    set((state) => ({
-      labels: [...state.labels, parsed.data],
-    }));
-  },
+      const labelWithColor: Label = {
+        id: label.id,
+        name: label.name,
+        color,
+      };
+
+      const parsed = LabelSchema.safeParse(labelWithColor);
+      if (!parsed.success) {
+        console.error(parsed.error);
+        return state;
+      }
+
+      const next = [...state.labels, parsed.data];
+      saveLabels(next);
+
+      return { labels: next };
+    }),
 
   updateLabel: (label) => {
     const parsed = LabelSchema.safeParse(label);
@@ -120,19 +162,30 @@ export const useDomainStore = create<DomainState>((set) => ({
       return;
     }
 
-    set((state) => ({
-      labels: state.labels.map((l) =>
+    set((state) => {
+      const next = state.labels.map((l) =>
         l.id === parsed.data.id ? parsed.data : l
-      ),
-    }));
+      );
+      saveLabels(next);
+      return { labels: next };
+    });
   },
 
   deleteLabel: (labelId) =>
-    set((state) => ({
-      labels: state.labels.filter((label) => label.id !== labelId),
-      cards: state.cards.map((card) => ({
+    set((state) => {
+      const nextLabels = state.labels.filter((label) => label.id !== labelId);
+
+      const nextCards = state.cards.map((card) => ({
         ...card,
         labelIds: card.labelIds.filter((id) => id !== labelId),
-      })),
-    })),
+      }));
+
+      saveLabels(nextLabels);
+      saveCards(nextCards);
+
+      return {
+        labels: nextLabels,
+        cards: nextCards,
+      };
+    }),
 }));

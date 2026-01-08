@@ -15,6 +15,7 @@ export const IdSchema = z.string().uuid();
 export const LabelSchema = z.object({
   id: IdSchema,
   name: z.string().min(1),
+  color: z.string(),
 });
 
 export type Label = z.infer<typeof LabelSchema>;
