@@ -4,7 +4,6 @@ import { ColorModeContext } from './theme/ColorModeContext';
 import { getTheme } from './theme/theme';
 import { AppLayout } from './ui/layout/AppLayout';
 import { Header } from './ui/header/Header';
-import { knowledgeMock } from './mock/knowledge.mock';
 import { KnowledgeCardList } from './ui/card/KnowledgeCardList';
 
 export default function App() {
@@ -26,7 +25,7 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AppLayout header={<Header />}>
-          <KnowledgeCardList items={knowledgeMock} />
+          <KnowledgeCardList />
         </AppLayout>
       </ThemeProvider>
     </ColorModeContext.Provider>

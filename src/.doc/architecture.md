@@ -1,6 +1,6 @@
 # KnowledgeStorage アーキテクチャ設計・実装方針
 
-本ドキュメントは、現時点（ラベル CRUD + localStorage 永続化 + UI 実装完了段階）における **全体構造・責務分離・実装方針** を明文化し、今後の作業で **構造的不整合や設計ブレを防ぐこと** を目的とする。
+本ドキュメントは、現時点（ラベル CRUD + Card CRUD + localStorage 永続化 + UI 実装完了段階）における **全体構造・責務分離・実装方針** を明文化し、今後の作業で **構造的不整合や設計ブレを防ぐこと** を目的とする。
 
 ---
 
@@ -33,14 +33,16 @@ Storage (localStorage)
 
 **ドメイン層（最重要）**
 
-| ファイル         | 責務                                     |
-| ---------------- | ---------------------------------------- |
-| `schema.ts`      | Zod による Card / Label の正規定義       |
-| `inputSchema.ts` | Create / Update 用 Input Schema          |
-| `type.ts`        | Zod から導出された TypeScript 型         |
-| `id.ts`          | ID 生成（UI / Store から直接触らせない） |
-| `storage.ts`     | localStorage IO（純関数）                |
-| `index.ts`       | domain public API の集約                 |
+| ファイル                      | 責務                                       | 実装状況 |
+| ----------------------------- | ------------------------------------------ | -------- |
+| `schema.ts`                   | Zod による Card / Label の正規定義         | ✅ 完了  |
+| `inputSchema.ts`              | Create / Update 用 Input Schema            | ✅ 完了  |
+| `id.ts`                       | ID 生成（UI / Store から直接触らせない）   | ✅ 完了  |
+| `storage.ts`                  | localStorage IO（純関数）                  | ✅ 完了  |
+| `generateUniqueLabelColor.ts` | ラベルカラー自動生成（HSL + Golden Angle） | ✅ 完了  |
+| `index.ts`                    | domain public API の集約                   | ✅ 完了  |
+
+**注意**: `type.ts` は削除されました。型定義は `schema.ts` から直接 `z.infer` で導出します。
 
 ### 設計ルール
 
@@ -77,20 +79,25 @@ Storage (localStorage)
 ```
 ui/
 ├─ header/
-│  ├─ Header.tsx
-│  ├─ LabelFilter.tsx
-│  └─ NewLabelDialog.tsx
+│  ├─ Header.tsx                    ✅ 完了
+│  ├─ LabelFilter.tsx               ✅ 完了
+│  ├─ NewLabelButton.tsx            ✅ 完了
+│  ├─ NewLabelDialog.tsx            ✅ 完了
+│  └─ SearchInput.tsx               ✅ 完了（UI実装のみ、検索機能は未実装）
 ├─ label/
-│  ├─ LabelManageDialog.tsx
-│  ├─ LabelRow.tsx
-│  ├─ ConfirmDeleteDialog.tsx
-│  └─ generateUniqueLabelColor.ts
+│  ├─ LabelManageDialog.tsx        ✅ 完了
+│  ├─ LabelRow.tsx                  ✅ 完了
+│  └─ ConfirmDeleteDialog.tsx      ✅ 完了
 ├─ card/
-│  ├─ KnowledgeCard.tsx
-│  └─ KnowledgeCardList.tsx
+│  ├─ KnowledgeCard.tsx             ✅ 完了（リッチなUI実装）
+│  ├─ KnowledgeCardList.tsx         ✅ 完了（MUI Grid2レイアウト）
+│  ├─ CardCreateButton.tsx          ✅ 完了（MUI Button）
+│  └─ CardCreateDialog.tsx         ✅ 完了（MUI Dialog、ラベル選択はプレースホルダー）
 └─ layout/
-   └─ AppLayout.tsx
+   └─ AppLayout.tsx                 ✅ 完了
 ```
+
+**注意**: `generateUniqueLabelColor.ts` は `domain/` に移動されました。
 
 ### UI 実装原則
 
@@ -117,13 +124,15 @@ ui/
 - 固定色配列は禁止
 - 作成時に **既存ラベルと被らない色を自動生成**
 - HSL + Golden Angle を使用
+- 実装場所: `src/domain/generateUniqueLabelColor.ts`
 
 ```ts
-color = generateUniqueLabelColor(existingLabels);
+color = generateUniqueLabelColor(existingLabels.length);
 ```
 
 - 色の決定責務は **DomainStore**
 - UI で色を決めてはいけない
+- `generateUniqueLabelColor` は Domain 層に配置（UI 層から削除済み）
 
 ---
 
@@ -183,16 +192,99 @@ knowledge-storage:cards
 
 ---
 
-## 7. 次フェーズの推奨順
+## 7. 実装状況と今後の実装予定
 
-1. Card 作成 UI（Markdown Editor + Label Select）
-2. Card 検索（全文 + ラベル AND）
-3. Card 編集 UI
-4. 将来的な Repository 抽象化
+### 実装済み機能 ✅
+
+#### ラベル機能
+
+- ✅ ラベル作成（自動カラー生成）
+- ✅ ラベル一覧表示
+- ✅ ラベル編集（インライン編集）
+- ✅ ラベル削除（確認ダイアログ付き）
+- ✅ ラベルフィルター UI（Header）
+
+#### Card 機能
+
+- ✅ Card 作成（基本実装、ラベル選択はプレースホルダー）
+- ✅ Card 一覧表示（MUI Grid2 レイアウト）
+- ✅ Card 表示（リッチな UI、相対時間表示、ラベル表示）
+- ✅ Card 削除（Store 実装済み、UI 未実装）
+
+#### 永続化
+
+- ✅ localStorage による Card / Label の永続化
+- ✅ 起動時の自動復元（Zod validation 付き）
+
+### 未実装機能（今後の実装予定）
+
+#### Card 機能拡張
+
+- ⏳ Card 編集 UI
+- ⏳ Card 詳細表示（Markdown 表示）
+- ⏳ Card 削除 UI（確認ダイアログ）
+- ⏳ ラベル選択機能（Card 作成・編集時）
+
+#### 検索機能
+
+- ⏳ 全文検索（Card title / body）
+- ⏳ ラベルフィルター（AND 検索）
+- ⏳ 検索結果表示
+
+#### Markdown 機能
+
+- ⏳ Markdown エディタ（Card 作成・編集用）
+- ⏳ Markdown ビューア（Card 表示用）
+
+#### その他
+
+- ⏳ Card 並び替え（日付、タイトル順など）
+- ⏳ バックアップ・エクスポート機能
+- ⏳ 将来的な Repository 抽象化（DB 移行対応）
 
 ---
 
-## 8. 設計思想まとめ
+## 8. 今後実装予定のファイル一覧
+
+### Card 機能拡張
+
+| ファイル                           | 責務                            | 優先度 |
+| ---------------------------------- | ------------------------------- | ------ |
+| `src/ui/card/CardEditDialog.tsx`   | カード編集ダイアログ            | 高     |
+| `src/ui/card/CardDetailDialog.tsx` | カード詳細表示（Markdown 表示） | 中     |
+| `src/ui/card/CardDeleteDialog.tsx` | カード削除確認ダイアログ        | 高     |
+
+### 検索機能
+
+| ファイル                          | 責務                                       | 優先度 |
+| --------------------------------- | ------------------------------------------ | ------ |
+| `src/ui/search/SearchBar.tsx`     | 検索バーコンポーネント                     | 高     |
+| `src/ui/search/SearchResults.tsx` | 検索結果表示                               | 高     |
+| `src/domain/search.ts`            | 検索ロジック（全文検索、ラベルフィルター） | 高     |
+
+### Markdown 機能
+
+| ファイル                             | 責務                                   | 優先度 |
+| ------------------------------------ | -------------------------------------- | ------ |
+| `src/ui/markdown/MarkdownEditor.tsx` | Markdown エディタ（Card 作成・編集用） | 中     |
+| `src/ui/markdown/MarkdownViewer.tsx` | Markdown ビューア（Card 表示用）       | 中     |
+
+### ラベル選択機能
+
+| ファイル                         | 責務                                              | 優先度 |
+| -------------------------------- | ------------------------------------------------- | ------ |
+| `src/ui/label/LabelSelector.tsx` | ラベル選択コンポーネント（Card 作成・編集で使用） | 高     |
+
+### 実装時の注意事項
+
+- すべての新規ファイルは architecture.md の原則に従うこと
+- UI 層は `useDomainStore` 経由でデータ操作を行うこと
+- Domain 層の新規ファイルは `domain/index.ts` で export すること
+- 検索ロジックは Domain 層に配置し、純関数として実装すること
+
+---
+
+## 9. 設計思想まとめ
 
 > 「シンプルであることを壊さない」
 

@@ -8,7 +8,7 @@ import {
   UpdateCardInputSchema,
 } from '../domain/inputSchema';
 import { generateId } from '../domain/id';
-import { generateUniqueLabelColor } from '../ui/label/generateUniqueLabelColor';
+import { generateUniqueLabelColor } from '../domain/generateUniqueLabelColor';
 import {
   loadLabels,
   saveLabels,

@@ -7,3 +7,4 @@ export const generateUniqueLabelColor = (index: number): string => {
 
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 };
+
