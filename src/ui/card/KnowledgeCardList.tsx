@@ -3,18 +3,26 @@ import { KnowledgeCard } from './KnowledgeCard';
 import { useDomainStore } from '../../stores/useDomainStore';
 
 export const KnowledgeCardList = () => {
-  const { cards } = useDomainStore();
+  const { cards, selectedLabelIds } = useDomainStore();
+
+  // ラベルフィルタリング
+  const filteredCards =
+    selectedLabelIds.length === 0
+      ? cards
+      : cards.filter((card) =>
+          card.labelIds.some((id) => selectedLabelIds.includes(id))
+        );
 
   return (
     <Stack spacing={3}>
       {/* Card Grid */}
-      {cards.length === 0 ? (
+      {filteredCards.length === 0 ? (
         <Stack alignItems='center' spacing={2} sx={{ py: 8 }}>
           <p>カードがありません</p>
         </Stack>
       ) : (
         <Grid container spacing={3}>
-          {cards.map((card) => (
+          {filteredCards.map((card) => (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={card.id}>
               <KnowledgeCard card={card} />
             </Grid>

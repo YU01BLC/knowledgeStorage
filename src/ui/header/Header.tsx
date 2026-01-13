@@ -9,6 +9,7 @@ import { useTheme } from '@mui/material/styles';
 import { ColorModeContext } from '../../theme/ColorModeContext';
 import { LabelManageDialog } from '../label/LabelManageDialog';
 import { CardCreateButton } from '../card/CardCreateButton';
+import { useDomainStore } from '../../stores/useDomainStore';
 
 export type Label = {
   id: string;
@@ -21,16 +22,8 @@ export const Header = () => {
   const theme = useTheme();
   const colorMode = useContext(ColorModeContext);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
-
-  const [labels, setLabels] = useState<Label[]>([
-    { id: '1', name: '中山', color: '#64b5f6' },
-    { id: '2', name: '芝2000', color: '#64b5f6' },
-    { id: '3', name: '中京', color: '#81c784' },
-    { id: '4', name: '血統', color: '#e57373' },
-    { id: '5', name: 'ノーザンファーム', color: '#e57373' },
-  ]);
-  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { labels, selectedLabelIds, setSelectedLabelIds } = useDomainStore();
 
   return (
     <Box display='flex' alignItems='center' gap={2} p={2} flexWrap='wrap'>

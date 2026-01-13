@@ -43,6 +43,12 @@ type DomainState = {
   labels: Label[];
 
   /**
+   * Label Filter (UI State)
+   */
+  selectedLabelIds: string[];
+  setSelectedLabelIds: (ids: string[]) => void;
+
+  /**
    * Card CRUD
    */
   addCard: (input: CreateCardInput) => void;
@@ -65,6 +71,12 @@ type DomainState = {
 export const useDomainStore = create<DomainState>((set) => ({
   cards: restoreCards(),
   labels: restoreLabels(),
+
+  /**
+   * -------- Label Filter --------
+   */
+  selectedLabelIds: [],
+  setSelectedLabelIds: (ids) => set({ selectedLabelIds: ids }),
 
   /**
    * -------- Card --------
@@ -186,6 +198,7 @@ export const useDomainStore = create<DomainState>((set) => ({
       return {
         labels: nextLabels,
         cards: nextCards,
+        selectedLabelIds: state.selectedLabelIds.filter((id) => id !== labelId),
       };
     }),
 }));
