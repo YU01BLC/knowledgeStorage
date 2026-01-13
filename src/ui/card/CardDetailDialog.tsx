@@ -23,6 +23,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import { Card as CardType } from '../../domain/schema';
 import { useDomainStore } from '../../stores/useDomainStore';
 import { CardDeleteConfirmDialog } from './CardDeleteConfirmDialog';
+import { LabelSelector } from '../label/LabelSelector';
 
 type Props = {
   open: boolean;
@@ -53,7 +54,9 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
   const [body, setBody] = useState(card.body);
   const [titleError, setTitleError] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-
+  const [editingLabelIds, setEditingLabelIds] = useState<string[]>(
+    card.labelIds
+  );
   // cardが変更されたときにフォームをリセット
   useEffect(() => {
     if (open) {
@@ -234,10 +237,12 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
               <Typography variant='subtitle2' sx={{ mb: 1, fontWeight: 600 }}>
                 ラベル
               </Typography>
+
               {editing ? (
-                <Typography variant='body2' color='text.secondary'>
-                  ラベル選択機能（今後実装予定）
-                </Typography>
+                <LabelSelector
+                  value={editingLabelIds}
+                  onChange={setEditingLabelIds}
+                />
               ) : cardLabels.length > 0 ? (
                 <Stack direction='row' spacing={1} useFlexGap flexWrap='wrap'>
                   {cardLabels.map((label) => (
@@ -261,7 +266,7 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
                 </Stack>
               ) : (
                 <Typography variant='body2' color='text.secondary'>
-                  ラベルがありません
+                  ラベルは設定されていません
                 </Typography>
               )}
             </Box>
