@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useDomainStore } from '../../stores/useDomainStore';
+import { LabelSelector } from '../label/LabelSelector';
 
 type Props = {
   open: boolean;
@@ -22,6 +23,7 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [titleError, setTitleError] = useState(false);
+  const [labelIds, setLabelIds] = useState<string[]>([]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,12 +36,13 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
     addCard({
       title: title.trim(),
       body: body.trim(),
-      labelIds: [],
+      labelIds,
     });
 
-    // Reset form
+    // reset
     setTitle('');
     setBody('');
+    setLabelIds([]);
     setTitleError(false);
     onClose();
   };
@@ -47,6 +50,7 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
   const handleClose = () => {
     setTitle('');
     setBody('');
+    setLabelIds([]);
     setTitleError(false);
     onClose();
   };
@@ -63,19 +67,22 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
               placeholder='カードのタイトルを入力'
               value={title}
               onChange={(e) => {
-                setTitle(e.target.value);
-                setTitleError(false);
+                if (e.target.value.length <= 60) {
+                  setTitle(e.target.value);
+                  setTitleError(false);
+                }
               }}
               error={titleError}
-              helperText={titleError ? 'タイトルは必須です' : ''}
+              helperText={titleError && 'タイトルは必須です'}
               required
               fullWidth
               autoFocus
+              variant='outlined'
             />
 
             <TextField
               label='内容'
-              placeholder='カードの内容を入力（Markdown対応）'
+              placeholder='カードの内容を入力'
               value={body}
               onChange={(e) => setBody(e.target.value)}
               multiline
@@ -83,11 +90,12 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
               fullWidth
             />
 
-            {/* ラベル選択UI（将来の拡張用） */}
+            {/* Labels（詳細ダイアログと同一仕様） */}
             <Stack spacing={1}>
-              <Typography variant='body2' color='text.secondary'>
-                ラベル（今後実装予定）
+              <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>
+                ラベル
               </Typography>
+              <LabelSelector value={labelIds} onChange={setLabelIds} />
             </Stack>
           </Stack>
         </DialogContent>

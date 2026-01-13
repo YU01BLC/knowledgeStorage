@@ -11,28 +11,30 @@ import { Label } from '../../domain/schema';
 import { useDomainStore } from '../../stores/useDomainStore';
 
 type Props = {
-  value: Label[];
-  onChange: (labels: Label[]) => void;
+  value: string[]; // ← labelIds
+  onChange: (ids: string[]) => void;
 };
 
 export const LabelSelector = ({ value, onChange }: Props) => {
   const labels = useDomainStore((s) => s.labels);
   const addLabel = useDomainStore((s) => s.addLabel);
 
-  /** 検索文字列（制御） */
+  /** 検索文字列 */
   const [inputValue, setInputValue] = useState('');
 
-  /**
-   * 選択済みラベルを除外
-   */
-  const selectableLabels = useMemo(() => {
-    const selectedIds = new Set(value.map((l) => l.id));
-    return labels.filter((l) => !selectedIds.has(l.id));
-  }, [labels, value]);
+  /** 選択済みラベル */
+  const selectedLabels = useMemo(
+    () => labels.filter((l) => value.includes(l.id)),
+    [labels, value]
+  );
 
-  /**
-   * 新規作成可能か
-   */
+  /** 未選択ラベル */
+  const selectableLabels = useMemo(
+    () => labels.filter((l) => !value.includes(l.id)),
+    [labels, value]
+  );
+
+  /** 新規作成可能か */
   const canCreate = useMemo(() => {
     const name = inputValue.trim();
     if (!name) return false;
@@ -40,23 +42,15 @@ export const LabelSelector = ({ value, onChange }: Props) => {
     return !labels.some((l) => l.name.toLowerCase() === name.toLowerCase());
   }, [inputValue, labels]);
 
-  /**
-   * 作成 & 即付与
-   */
+  /** 作成 & 即付与 */
   const createAndAttach = () => {
     const name = inputValue.trim();
-    if (!name || !canCreate) return;
+    if (!canCreate) return;
 
     const id = crypto.randomUUID();
     addLabel({ id, name });
 
-    const created = useDomainStore.getState().labels.find((l) => l.id === id);
-
-    if (created) {
-      onChange([...value, created]);
-    }
-
-    // 選択後は検索欄をクリア
+    onChange([...value, id]);
     setInputValue('');
   };
 
@@ -67,20 +61,18 @@ export const LabelSelector = ({ value, onChange }: Props) => {
         freeSolo
         value={null}
         inputValue={inputValue}
-        onInputChange={(_, newValue) => {
-          setInputValue(newValue);
-        }}
+        onInputChange={(_, newValue) => setInputValue(newValue)}
         onChange={(_, newValue) => {
           if (!newValue) return;
 
-          // 既存ラベル選択
+          // 既存ラベル
           if (typeof newValue !== 'string') {
-            onChange([...value, newValue]);
+            onChange([...value, newValue.id]);
             setInputValue('');
             return;
           }
 
-          // Enter による作成
+          // Enter 作成
           createAndAttach();
         }}
         getOptionLabel={(option) =>
@@ -92,53 +84,55 @@ export const LabelSelector = ({ value, onChange }: Props) => {
 
           return options.filter((o) => o.name.toLowerCase().includes(input));
         }}
-        renderOption={(props, option) => (
-          <Box
-            component='li'
-            {...props}
-            sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-          >
+        renderOption={(props, option) => {
+          const { key, ...rest } = props; // ← key分離（警告対策）
+          return (
             <Box
-              sx={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                bgcolor: option.color,
-              }}
-            />
-            {option.name}
-          </Box>
-        )}
+              component='li'
+              key={key}
+              {...rest}
+              sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+            >
+              <Box
+                sx={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  bgcolor: option.color,
+                }}
+              />
+              {option.name}
+            </Box>
+          );
+        }}
         renderInput={(params) => (
           <TextField
             {...params}
             label='ラベル'
             placeholder='検索 or 作成'
-            slotProps={{
-              input: {
-                ...params.InputProps,
-                endAdornment: (
-                  <>
-                    {canCreate && (
-                      <Button
-                        size='small'
-                        onClick={createAndAttach}
-                        sx={{ mr: 1, whiteSpace: 'nowrap' }}
-                      >
-                        作成
-                      </Button>
-                    )}
-                    {params.InputProps.endAdornment}
-                  </>
-                ),
-              },
+            InputProps={{
+              ...params.InputProps,
+              endAdornment: (
+                <>
+                  {canCreate && (
+                    <Button
+                      size='small'
+                      onClick={createAndAttach}
+                      sx={{ mr: 1, whiteSpace: 'nowrap' }}
+                    >
+                      作成
+                    </Button>
+                  )}
+                  {params.InputProps.endAdornment}
+                </>
+              ),
             }}
           />
         )}
       />
 
-      {/* 選択済みラベル */}
-      {value.length > 0 && (
+      {/* 選択済みラベル（×あり） */}
+      {selectedLabels.length > 0 && (
         <Stack
           direction='row'
           spacing={1}
@@ -146,11 +140,11 @@ export const LabelSelector = ({ value, onChange }: Props) => {
           flexWrap='wrap'
           sx={{ mt: 1 }}
         >
-          {value.map((label) => (
+          {selectedLabels.map((label) => (
             <Chip
               key={label.id}
               label={label.name}
-              onDelete={() => onChange(value.filter((l) => l.id !== label.id))}
+              onDelete={() => onChange(value.filter((id) => id !== label.id))}
               variant='outlined'
               sx={{
                 borderColor: label.color,

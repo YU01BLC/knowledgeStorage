@@ -1,5 +1,4 @@
 import { Grid, Stack } from '@mui/material';
-import { CardCreateButton } from './CardCreateButton';
 import { KnowledgeCard } from './KnowledgeCard';
 import { useDomainStore } from '../../stores/useDomainStore';
 
@@ -8,9 +7,6 @@ export const KnowledgeCardList = () => {
 
   return (
     <Stack spacing={3}>
-      {/* Header */}
-      <CardCreateButton />
-
       {/* Card Grid */}
       {cards.length === 0 ? (
         <Stack alignItems='center' spacing={2} sx={{ py: 8 }}>

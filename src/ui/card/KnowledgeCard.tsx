@@ -34,7 +34,7 @@ const formatRelativeTime = (timestamp: number): string => {
   return 'たった今';
 };
 
-const MAX_BODY_LINES = 10;
+const MAX_BODY_LINES = 8;
 const CARD_HEIGHT = 420;
 
 export const KnowledgeCard = ({ card }: Props) => {

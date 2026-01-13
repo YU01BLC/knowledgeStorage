@@ -8,6 +8,7 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import { useTheme } from '@mui/material/styles';
 import { ColorModeContext } from '../../theme/ColorModeContext';
 import { LabelManageDialog } from '../label/LabelManageDialog';
+import { CardCreateButton } from '../card/CardCreateButton';
 
 export type Label = {
   id: string;
@@ -57,6 +58,7 @@ export const Header = () => {
       <Button variant='contained' onClick={() => setLabelDialogOpen(true)}>
         ラベル管理
       </Button>
+      <CardCreateButton />
 
       <LabelManageDialog
         open={labelDialogOpen}
