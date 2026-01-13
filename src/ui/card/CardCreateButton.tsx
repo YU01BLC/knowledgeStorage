@@ -7,7 +7,9 @@ export const CardCreateButton = () => {
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}>カード作成</Button>
+      <Button variant='contained' onClick={() => setOpen(true)}>
+        カード作成
+      </Button>
 
       <CardCreateDialog open={open} onClose={() => setOpen(false)} />
     </>
