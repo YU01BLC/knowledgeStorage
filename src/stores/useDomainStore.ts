@@ -15,6 +15,7 @@ import {
   loadCards,
   saveCards,
 } from '../domain/storage';
+import { BackupSchema } from '../domain/backupSchema';
 
 /**
  * =========================
@@ -61,6 +62,12 @@ type DomainState = {
   addLabel: (label: Omit<Label, 'color'> & { color?: string }) => void;
   updateLabel: (label: Label) => void;
   deleteLabel: (labelId: string) => void;
+
+  /**
+   * Backup
+   */
+  exportBackup: () => void;
+  importBackup: (data: unknown) => boolean;
 };
 
 /**
@@ -68,7 +75,7 @@ type DomainState = {
  * Store Implementation
  * =========================
  */
-export const useDomainStore = create<DomainState>((set) => ({
+export const useDomainStore = create<DomainState>((set, get) => ({
   cards: restoreCards(),
   labels: restoreLabels(),
 
@@ -201,4 +208,51 @@ export const useDomainStore = create<DomainState>((set) => ({
         selectedLabelIds: state.selectedLabelIds.filter((id) => id !== labelId),
       };
     }),
+
+  /**
+   * -------- Backup --------
+   */
+  exportBackup: () => {
+    const { cards, labels } = get();
+
+    const backup = {
+      version: 1 as const,
+      exportedAt: Date.now(),
+      cards,
+      labels,
+    };
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: 'application/json',
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `knowledge-backup-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  importBackup: (data) => {
+    const parsed = BackupSchema.safeParse(data);
+
+    if (!parsed.success) {
+      console.error(parsed.error);
+      return false;
+    }
+
+    const { cards, labels } = parsed.data;
+
+    saveCards(cards);
+    saveLabels(labels);
+
+    set({
+      cards,
+      labels,
+      selectedLabelIds: [],
+    });
+
+    return true;
+  },
 }));
