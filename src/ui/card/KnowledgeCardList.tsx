@@ -3,19 +3,24 @@ import { KnowledgeCard } from './KnowledgeCard';
 import { useDomainStore } from '../../stores/useDomainStore';
 
 export const KnowledgeCardList = () => {
-  const { cards, selectedLabelIds } = useDomainStore();
+  const { cards, selectedLabelIds, searchText } = useDomainStore();
 
-  // ラベルフィルタリング
-  const filteredCards =
-    selectedLabelIds.length === 0
-      ? cards
-      : cards.filter((card) =>
-          card.labelIds.some((id) => selectedLabelIds.includes(id))
-        );
+  const normalizedSearch = searchText.trim();
+
+  const filteredCards = cards.filter((card) => {
+    // 🔍 検索（前後一致）
+    const textMatch =
+      normalizedSearch === '' || card.title.includes(normalizedSearch);
+    // 🏷 ラベルフィルタ（1つでも一致すればOK）
+    const labelMatch =
+      selectedLabelIds.length === 0 ||
+      card.labelIds.some((id) => selectedLabelIds.includes(id));
+
+    return textMatch && labelMatch;
+  });
 
   return (
     <Stack spacing={3}>
-      {/* Card Grid */}
       {filteredCards.length === 0 ? (
         <Stack alignItems='center' spacing={2} sx={{ py: 8 }}>
           <p>カードがありません</p>

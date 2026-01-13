@@ -12,7 +12,6 @@ import { ColorModeContext } from '../../theme/ColorModeContext';
 import { useDomainStore } from '../../stores/useDomainStore';
 
 export const Header = () => {
-  const [searchText, setSearchText] = useState('');
   const theme = useTheme();
   const colorMode = useContext(ColorModeContext);
 
@@ -26,6 +25,8 @@ export const Header = () => {
     addLabel,
     exportBackup,
     importBackup,
+    searchText,
+    setSearchText,
   } = useDomainStore();
 
   return (
@@ -42,7 +43,7 @@ export const Header = () => {
       {/* Search */}
       <TextField
         size='small'
-        placeholder='検索（レース名・メモなど）'
+        placeholder='検索'
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
         sx={{ minWidth: 260 }}

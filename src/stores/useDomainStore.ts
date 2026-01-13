@@ -50,6 +50,12 @@ type DomainState = {
   setSelectedLabelIds: (ids: string[]) => void;
 
   /**
+   * Search
+   */
+  searchText: string;
+  setSearchText: (text: string) => void;
+
+  /**
    * Card CRUD
    */
   addCard: (input: CreateCardInput) => void;
@@ -84,6 +90,12 @@ export const useDomainStore = create<DomainState>((set, get) => ({
    */
   selectedLabelIds: [],
   setSelectedLabelIds: (ids) => set({ selectedLabelIds: ids }),
+
+  /**
+   * -------- Search --------
+   */
+  searchText: '',
+  setSearchText: (text) => set({ searchText: text }),
 
   /**
    * -------- Card --------
