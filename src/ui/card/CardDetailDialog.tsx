@@ -23,6 +23,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import { Card as CardType } from '../../domain/schema';
 import { useDomainStore } from '../../stores/useDomainStore';
 import { CardDeleteConfirmDialog } from './CardDeleteConfirmDialog';
+import { LabelSelector } from '../label/LabelSelector';
 
 type Props = {
   open: boolean;
@@ -54,17 +55,25 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
   const [titleError, setTitleError] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  // cardが変更されたときにフォームをリセット
+  /** ✅ 変更点①：Label[] → string[] */
+  const [editingLabelIds, setEditingLabelIds] = useState<string[]>([]);
+
+  /** ダイアログ open / card 切替時の初期化 */
   useEffect(() => {
-    if (open) {
-      setTitle(card.title);
-      setBody(card.body);
-      setEditing(false);
-      setTitleError(false);
-    }
+    if (!open) return;
+
+    setTitle(card.title);
+    setBody(card.body);
+    setEditing(false);
+    setTitleError(false);
+
+    /** ✅ 変更点②：card.labelIds をそのままコピー */
+    setEditingLabelIds(card.labelIds);
   }, [card, open]);
 
+  /** read only 表示用 */
   const cardLabels = labels.filter((label) => card.labelIds.includes(label.id));
+
   const updatedAtDate = new Date(card.updatedAt).toLocaleString('ja-JP', {
     year: 'numeric',
     month: 'long',
@@ -72,6 +81,7 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+
   const createdAtDate = new Date(card.createdAt).toLocaleString('ja-JP', {
     year: 'numeric',
     month: 'long',
@@ -79,6 +89,7 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+
   const relativeTime = formatRelativeTime(card.updatedAt);
 
   const handleSave = () => {
@@ -91,7 +102,8 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
       id: card.id,
       title: title.trim(),
       body: body.trim(),
-      labelIds: card.labelIds,
+      /** ✅ 変更点③：そのまま string[] を渡す */
+      labelIds: editingLabelIds,
     });
 
     setEditing(false);
@@ -101,6 +113,10 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
   const handleCancel = () => {
     setTitle(card.title);
     setBody(card.body);
+
+    /** 編集破棄時も元に戻す */
+    setEditingLabelIds(card.labelIds);
+
     setEditing(false);
     setTitleError(false);
   };
@@ -156,11 +172,14 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
                 {editing ? 'カード編集' : card.title}
               </Typography>
             </Stack>
+
             {!editing && (
               <IconButton
                 size='small'
                 onClick={(e) => {
                   e.stopPropagation();
+                  /** 編集開始時に labelIds を同期 */
+                  setEditingLabelIds(card.labelIds);
                   setEditing(true);
                 }}
                 sx={{ ml: 1 }}
@@ -229,22 +248,22 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
 
             <Divider />
 
-            {/* Labels */}
             <Box>
               <Typography variant='subtitle2' sx={{ mb: 1, fontWeight: 600 }}>
                 ラベル
               </Typography>
+
               {editing ? (
-                <Typography variant='body2' color='text.secondary'>
-                  ラベル選択機能（今後実装予定）
-                </Typography>
+                <LabelSelector
+                  value={editingLabelIds}
+                  onChange={setEditingLabelIds}
+                />
               ) : cardLabels.length > 0 ? (
                 <Stack direction='row' spacing={1} useFlexGap flexWrap='wrap'>
                   {cardLabels.map((label) => (
                     <Chip
                       key={label.id}
                       label={label.name}
-                      size='medium'
                       variant='outlined'
                       sx={{
                         borderColor: label.color,
@@ -261,7 +280,7 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
                 </Stack>
               ) : (
                 <Typography variant='body2' color='text.secondary'>
-                  ラベルがありません
+                  ラベルは設定されていません
                 </Typography>
               )}
             </Box>
@@ -298,14 +317,10 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
           </Stack>
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+        <DialogActions>
           {editing ? (
             <>
-              <Button
-                onClick={handleCancel}
-                startIcon={<CancelIcon />}
-                color='inherit'
-              >
+              <Button onClick={handleCancel} startIcon={<CancelIcon />}>
                 キャンセル
               </Button>
               <Button
@@ -319,10 +334,9 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
           ) : (
             <>
               <Button
-                onClick={() => setDeleteConfirmOpen(true)}
                 color='error'
                 startIcon={<DeleteIcon />}
-                sx={{ mr: 'auto' }}
+                onClick={() => setDeleteConfirmOpen(true)}
               >
                 削除
               </Button>

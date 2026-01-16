@@ -47,6 +47,7 @@ export const LabelFilter = ({ labels, selectedLabelIds, onChange }: Props) => {
           <Box display='flex' flexWrap='wrap' gap={1}>
             {labels.map((label) => {
               const selected = selectedLabelIds.includes(label.id);
+
               return (
                 <Chip
                   key={label.id}

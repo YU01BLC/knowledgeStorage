@@ -91,6 +91,7 @@ ui/
 ├─ card/
 │  ├─ KnowledgeCard.tsx             ✅ 完了（リッチなUI実装）
 │  ├─ KnowledgeCardList.tsx         ✅ 完了（MUI Grid2レイアウト）
+│  ├─ CardDetailDialog.tsx          ✅ 完了（MUI baseUI実装済み。label付与する箇所のみ未実装）
 │  ├─ CardCreateButton.tsx          ✅ 完了（MUI Button）
 │  └─ CardCreateDialog.tsx         ✅ 完了（MUI Dialog、ラベル選択はプレースホルダー）
 └─ layout/
