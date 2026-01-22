@@ -1,10 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import electron from 'vite-plugin-electron/simple';
+import path from 'node:path';
 
 export default defineConfig({
   plugins: [
     react(),
+
+    // ✅ Web / PWA 用
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
@@ -30,6 +34,16 @@ export default defineConfig({
         ],
       },
     }),
+
+    // ✅ Electron 用
+    electron({
+      main: {
+        entry: 'electron/main.ts',
+      },
+      preload: {
+        input: path.join(__dirname, 'electron/preload.ts'),
+      },
+      renderer: {},
+    }),
   ],
-  base: '/knowledgeStorage/'
 });
