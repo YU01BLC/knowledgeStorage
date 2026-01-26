@@ -1,13 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { ColorModeContext } from './theme/ColorModeContext';
 import { getTheme } from './theme/theme';
 import { AppLayout } from './ui/layout/AppLayout';
 import { Header } from './ui/header/Header';
-import { KnowledgeCardList } from './ui/card/KnowledgeCardList';
+import { KnowledgeCardList } from './ui/card/cardList';
+import { useDomainStore } from './stores/useDomainStore';
 
 export default function App() {
   const [mode, setMode] = useState<'light' | 'dark'>('dark');
+  const initialize = useDomainStore((state) => state.initialize);
+
+  useEffect(() => {
+    initialize().catch((error) => {
+      console.error('Failed to initialize store:', error);
+    });
+  }, [initialize]);
 
   const colorMode = useMemo(
     () => ({

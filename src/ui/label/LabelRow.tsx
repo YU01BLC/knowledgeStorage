@@ -3,7 +3,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useState } from 'react';
 import { Label } from '../../domain/schema';
 import { useDomainStore } from '../../stores/useDomainStore';
-import { ConfirmDeleteDialog } from '../label/ConfirmDeleteDialog';
+import { ConfirmDialog } from '../card/ConfirmDialog';
 
 type Props = {
   label: Label;
@@ -16,7 +16,7 @@ export const LabelRow = ({ label }: Props) => {
   const [draftName, setDraftName] = useState(label.name);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const commit = () => {
+  const commit = async () => {
     const trimmed = draftName.trim();
 
     if (!trimmed) {
@@ -25,7 +25,7 @@ export const LabelRow = ({ label }: Props) => {
     }
 
     if (trimmed !== label.name) {
-      updateLabel({ ...label, name: trimmed });
+      await updateLabel({ ...label, name: trimmed });
     }
 
     setEditing(false);
@@ -74,16 +74,18 @@ export const LabelRow = ({ label }: Props) => {
         )}
       </Box>
 
-      <ConfirmDeleteDialog
+      <ConfirmDialog
         open={confirmOpen}
-        labelName={label.name}
+        title='ラベル削除'
+        message={`「${label.name}」を削除しますか？`}
+        confirmLabel='削除'
+        onConfirm={async () => {
+          await deleteLabel(label.id);
+          setConfirmOpen(false);
+        }}
         onCancel={() => {
           setConfirmOpen(false);
           cancel();
-        }}
-        onConfirm={() => {
-          deleteLabel(label.id);
-          setConfirmOpen(false);
         }}
       />
     </>

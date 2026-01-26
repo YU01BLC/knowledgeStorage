@@ -65,7 +65,12 @@ export const Header = () => {
 
       {/* 右寄せエリア */}
       <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-        <Button variant='outlined' onClick={exportBackup}>
+        <Button
+          variant='outlined'
+          onClick={async () => {
+            await exportBackup();
+          }}
+        >
           バックアップ
         </Button>
 
@@ -84,7 +89,7 @@ export const Header = () => {
                 const text = await file.text();
                 const json = JSON.parse(text);
 
-                const success = importBackup(json);
+                const success = await importBackup(json);
                 if (!success) {
                   alert('不正なバックアップファイルです');
                 }
@@ -107,7 +112,9 @@ export const Header = () => {
       <NewLabelDialog
         open={newLabelDialogOpen}
         onClose={() => setNewLabelDialogOpen(false)}
-        onCreate={(label) => addLabel(label)}
+        onCreate={async (label) => {
+          await addLabel(label);
+        }}
       />
     </Box>
   );

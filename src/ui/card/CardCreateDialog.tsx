@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -11,6 +10,7 @@ import {
 } from '@mui/material';
 import { useDomainStore } from '../../stores/useDomainStore';
 import { LabelSelector } from '../label/LabelSelector';
+import { useCardForm } from './useCardForm';
 
 type Props = {
   open: boolean;
@@ -20,38 +20,36 @@ type Props = {
 export const CardCreateDialog = ({ open, onClose }: Props) => {
   const { addCard } = useDomainStore();
 
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [titleError, setTitleError] = useState(false);
-  const [labelIds, setLabelIds] = useState<string[]>([]);
+  const {
+    title,
+    setTitle,
+    body,
+    setBody,
+    labelIds,
+    setLabelIds,
+    titleError,
+    setTitleError,
+    reset,
+    validate,
+  } = useCardForm();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title.trim()) {
-      setTitleError(true);
-      return;
-    }
+    if (!validate()) return;
 
-    addCard({
+    await addCard({
       title: title.trim(),
       body: body.trim(),
       labelIds,
     });
 
-    // reset
-    setTitle('');
-    setBody('');
-    setLabelIds([]);
-    setTitleError(false);
+    reset();
     onClose();
   };
 
   const handleClose = () => {
-    setTitle('');
-    setBody('');
-    setLabelIds([]);
-    setTitleError(false);
+    reset();
     onClose();
   };
 
@@ -69,8 +67,8 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
               onChange={(e) => {
                 if (e.target.value.length <= 60) {
                   setTitle(e.target.value);
-                  setTitleError(false);
                 }
+                setTitleError(false);
               }}
               error={titleError}
               helperText={titleError && 'タイトルは必須です'}

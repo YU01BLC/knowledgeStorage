@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import TuneIcon from '@mui/icons-material/Tune';
 import { IconButton, Popover, Box, Chip, Typography } from '@mui/material';
-
-type Label = {
-  id: string;
-  name: string;
-  color: string;
-};
+import { Label } from '../../domain/schema';
 
 type Props = {
   labels: Label[];
