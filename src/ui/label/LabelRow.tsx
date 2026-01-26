@@ -3,7 +3,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useState } from 'react';
 import { Label } from '../../domain/schema';
 import { useDomainStore } from '../../stores/useDomainStore';
-import { ConfirmDeleteDialog } from '../label/ConfirmDeleteDialog';
+import { ConfirmDialog } from '../card/ConfirmDialog';
 
 type Props = {
   label: Label;
@@ -74,16 +74,18 @@ export const LabelRow = ({ label }: Props) => {
         )}
       </Box>
 
-      <ConfirmDeleteDialog
+      <ConfirmDialog
         open={confirmOpen}
-        labelName={label.name}
-        onCancel={() => {
-          setConfirmOpen(false);
-          cancel();
-        }}
+        title='ラベル削除'
+        message={`「${label.name}」を削除しますか？`}
+        confirmLabel='削除'
         onConfirm={() => {
           deleteLabel(label.id);
           setConfirmOpen(false);
+        }}
+        onCancel={() => {
+          setConfirmOpen(false);
+          cancel();
         }}
       />
     </>

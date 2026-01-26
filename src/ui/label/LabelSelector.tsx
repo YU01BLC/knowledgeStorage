@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import {
   Autocomplete,
   TextField,
-  Chip,
   Box,
   Stack,
   Button,
 } from '@mui/material';
 import { Label } from '../../domain/schema';
 import { useDomainStore } from '../../stores/useDomainStore';
+import { LabelChip } from './LabelChip';
 
 type Props = {
   value: string[]; // ← labelIds
@@ -141,17 +141,10 @@ export const LabelSelector = ({ value, onChange }: Props) => {
           sx={{ mt: 1 }}
         >
           {selectedLabels.map((label) => (
-            <Chip
+            <LabelChip
               key={label.id}
-              label={label.name}
+              label={label}
               onDelete={() => onChange(value.filter((id) => id !== label.id))}
-              variant='outlined'
-              sx={{
-                borderColor: label.color,
-                color: label.color,
-                backgroundColor: `${label.color}12`,
-                fontWeight: 500,
-              }}
             />
           ))}
         </Stack>

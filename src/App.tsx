@@ -4,7 +4,7 @@ import { ColorModeContext } from './theme/ColorModeContext';
 import { getTheme } from './theme/theme';
 import { AppLayout } from './ui/layout/AppLayout';
 import { Header } from './ui/header/Header';
-import { KnowledgeCardList } from './ui/card/KnowledgeCardList';
+import { KnowledgeCardList } from './ui/card/cardList';
 
 export default function App() {
   const [mode, setMode] = useState<'light' | 'dark'>('dark');

@@ -1,5 +1,5 @@
 import { Grid, Stack } from '@mui/material';
-import { KnowledgeCard } from './KnowledgeCard';
+import { KnowledgeCard } from './card';
 import { useDomainStore } from '../../stores/useDomainStore';
 
 export const KnowledgeCardList = () => {

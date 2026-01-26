@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -7,14 +7,11 @@ import {
   Button,
   Typography,
   Stack,
-  Chip,
   Box,
   Divider,
-  useTheme,
   TextField,
   IconButton,
 } from '@mui/material';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ArticleIcon from '@mui/icons-material/Article';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -24,6 +21,9 @@ import { Card as CardType } from '../../domain/schema';
 import { useDomainStore } from '../../stores/useDomainStore';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LabelSelector } from '../label/LabelSelector';
+import { useCardForm } from './useCardForm';
+import { DateTimeDisplay } from '../common/DateTimeDisplay';
+import { LabelChip } from '../label/LabelChip';
 
 type Props = {
   open: boolean;
@@ -31,83 +31,49 @@ type Props = {
   card: CardType;
 };
 
-const formatRelativeTime = (timestamp: number): string => {
-  const now = Date.now();
-  const diff = now - timestamp;
-  const minutes = Math.floor(diff / 1000 / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}日前`;
-  if (hours > 0) return `${hours}時間前`;
-  if (minutes > 0) return `${minutes}分前`;
-  return 'たった今';
-};
-
 export const CardDetailDialog = ({ open, onClose, card }: Props) => {
   const { labels, updateCard, deleteCard } = useDomainStore();
-  const theme = useTheme();
 
   const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(card.title);
-  const [body, setBody] = useState(card.body);
-  const [editingLabelIds, setEditingLabelIds] = useState<string[]>([]);
-  const [titleError, setTitleError] = useState(false);
-
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
 
-  /** ダイアログ open / card 切替時の初期化 */
-  useEffect(() => {
-    if (!open) return;
-
-    setTitle(card.title);
-    setBody(card.body);
-    setEditingLabelIds(card.labelIds);
-    setEditing(false);
-    setTitleError(false);
-  }, [card, open]);
-
-  /** 編集差分検知（dirty 判定） */
-  const isDirty = useMemo(() => {
-    return (
-      title !== card.title ||
-      body !== card.body ||
-      JSON.stringify(editingLabelIds) !== JSON.stringify(card.labelIds)
-    );
-  }, [title, body, editingLabelIds, card]);
+  const {
+    title,
+    setTitle,
+    body,
+    setBody,
+    labelIds,
+    setLabelIds,
+    titleError,
+    setTitleError,
+    isDirty,
+    reset,
+    validate,
+  } = useCardForm({
+    card: open ? card : undefined,
+  });
 
   const cardLabels = labels.filter((label) =>
     card.labelIds.includes(label.id)
   );
 
-  const updatedAtDate = new Date(card.updatedAt).toLocaleString('ja-JP');
-  const createdAtDate = new Date(card.createdAt).toLocaleString('ja-JP');
-  const relativeTime = formatRelativeTime(card.updatedAt);
-
   const handleSave = () => {
-    if (!title.trim()) {
-      setTitleError(true);
-      return;
-    }
+    if (!validate()) return;
 
     updateCard({
       id: card.id,
       title: title.trim(),
       body: body.trim(),
-      labelIds: editingLabelIds,
+      labelIds,
     });
 
     setEditing(false);
-    setTitleError(false);
   };
 
   const handleCancelEdit = () => {
-    setTitle(card.title);
-    setBody(card.body);
-    setEditingLabelIds(card.labelIds);
+    reset();
     setEditing(false);
-    setTitleError(false);
   };
 
   const handleClose = () => {
@@ -150,7 +116,7 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
               <IconButton
                 size='small'
                 onClick={() => {
-                  setEditingLabelIds(card.labelIds);
+                  reset();
                   setEditing(true);
                 }}
               >
@@ -162,29 +128,28 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
 
         <DialogContent dividers>
           <Stack spacing={3}>
-            {editing && (
-              <TextField
-                label='タイトル'
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  setTitleError(false);
-                }}
-                error={titleError}
-                helperText={titleError && 'タイトルは必須です'}
-                fullWidth
-              />
-            )}
-
             {editing ? (
-              <TextField
-                label='内容'
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                multiline
-                rows={12}
-                fullWidth
-              />
+              <>
+                <TextField
+                  label='タイトル'
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setTitleError(false);
+                  }}
+                  error={titleError}
+                  helperText={titleError && 'タイトルは必須です'}
+                  fullWidth
+                />
+                <TextField
+                  label='内容'
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  multiline
+                  rows={12}
+                  fullWidth
+                />
+              </>
             ) : (
               <Typography sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
                 {card.body || '内容がありません'}
@@ -198,54 +163,21 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
                 ラベル
               </Typography>
               {editing ? (
-                <LabelSelector
-                  value={editingLabelIds}
-                  onChange={setEditingLabelIds}
-                />
+                <LabelSelector value={labelIds} onChange={setLabelIds} />
               ) : (
                 <Stack direction='row' spacing={1} flexWrap='wrap'>
                   {cardLabels.map((label) => (
-                    <Chip
-                      key={label.id}
-                      label={label.name}
-                      sx={{
-                        borderColor: label.color,
-                        color: label.color,
-                      }}
-                      variant='outlined'
-                    />
+                    <LabelChip key={label.id} label={label} />
                   ))}
                 </Stack>
               )}
             </Box>
 
             {!editing && (
-              <Box
-               sx={{
-                 display: 'flex',
-                 flexDirection: 'column',
-                 gap: 1,
-                 pt: 1,
-                 borderTop: `1px solid ${theme.palette.divider}`,
-               }}
-              >
-               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                 <AccessTimeIcon
-                   sx={{ fontSize: 16, color: 'text.secondary', opacity: 0.7 }}
-                 />
-                 <Typography variant='body2' color='text.secondary'>
-                   <strong>更新:</strong> {updatedAtDate} ({relativeTime})
-                 </Typography>
-               </Box>
-               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                 <AccessTimeIcon
-                   sx={{ fontSize: 16, color: 'text.secondary', opacity: 0.7 }}
-                 />
-                 <Typography variant='body2' color='text.secondary'>
-                   <strong>作成:</strong> {createdAtDate}
-                 </Typography>
-               </Box>
-              </Box>
+              <DateTimeDisplay
+                updatedAt={card.updatedAt}
+                createdAt={card.createdAt}
+              />
             )}
           </Stack>
         </DialogContent>
