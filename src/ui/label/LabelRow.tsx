@@ -16,7 +16,7 @@ export const LabelRow = ({ label }: Props) => {
   const [draftName, setDraftName] = useState(label.name);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const commit = () => {
+  const commit = async () => {
     const trimmed = draftName.trim();
 
     if (!trimmed) {
@@ -25,7 +25,7 @@ export const LabelRow = ({ label }: Props) => {
     }
 
     if (trimmed !== label.name) {
-      updateLabel({ ...label, name: trimmed });
+      await updateLabel({ ...label, name: trimmed });
     }
 
     setEditing(false);
@@ -79,8 +79,8 @@ export const LabelRow = ({ label }: Props) => {
         title='ラベル削除'
         message={`「${label.name}」を削除しますか？`}
         confirmLabel='削除'
-        onConfirm={() => {
-          deleteLabel(label.id);
+        onConfirm={async () => {
+          await deleteLabel(label.id);
           setConfirmOpen(false);
         }}
         onCancel={() => {

@@ -13,17 +13,17 @@ import { v4 as uuid } from 'uuid';
 type Props = {
   open: boolean;
   onClose: () => void;
-  onCreate: (label: { id: string; name: string; color: string }) => void;
+  onCreate: (label: { id: string; name: string; color: string }) => Promise<void>;
 };
 
 export const NewLabelDialog = ({ open, onClose, onCreate }: Props) => {
   const [name, setName] = useState('');
   const [color, setColor] = useState('#64b5f6');
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!name.trim()) return;
 
-    onCreate({
+    await onCreate({
       id: uuid(),
       name,
       color,

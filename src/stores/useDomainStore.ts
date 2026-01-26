@@ -14,7 +14,8 @@ import {
   saveLabels,
   loadCards,
   saveCards,
-} from '../domain/storage';
+} from '../domain/indexedDB';
+import { migrateFromLocalStorage } from '../domain/migrateFromLocalStorage';
 import { BackupSchema } from '../domain/backupSchema';
 
 /**
@@ -22,16 +23,26 @@ import { BackupSchema } from '../domain/backupSchema';
  * restore helpers
  * =========================
  */
-const restoreLabels = (): Label[] => {
-  const raw = loadLabels();
-  const parsed = z.array(LabelSchema).safeParse(raw);
-  return parsed.success ? parsed.data : [];
+const restoreLabels = async (): Promise<Label[]> => {
+  try {
+    const raw = await loadLabels();
+    const parsed = z.array(LabelSchema).safeParse(raw);
+    return parsed.success ? parsed.data : [];
+  } catch (error) {
+    console.error('Error restoring labels:', error);
+    return [];
+  }
 };
 
-const restoreCards = (): Card[] => {
-  const raw = loadCards();
-  const parsed = z.array(CardSchema).safeParse(raw);
-  return parsed.success ? parsed.data : [];
+const restoreCards = async (): Promise<Card[]> => {
+  try {
+    const raw = await loadCards();
+    const parsed = z.array(CardSchema).safeParse(raw);
+    return parsed.success ? parsed.data : [];
+  } catch (error) {
+    console.error('Error restoring cards:', error);
+    return [];
+  }
 };
 
 /**
@@ -58,22 +69,27 @@ type DomainState = {
   /**
    * Card CRUD
    */
-  addCard: (input: CreateCardInput) => void;
-  updateCard: (input: UpdateCardInput) => void;
-  deleteCard: (cardId: string) => void;
+  addCard: (input: CreateCardInput) => Promise<void>;
+  updateCard: (input: UpdateCardInput) => Promise<void>;
+  deleteCard: (cardId: string) => Promise<void>;
 
   /**
    * Label CRUD
    */
-  addLabel: (label: Omit<Label, 'color'> & { color?: string }) => void;
-  updateLabel: (label: Label) => void;
-  deleteLabel: (labelId: string) => void;
+  addLabel: (label: Omit<Label, 'color'> & { color?: string }) => Promise<void>;
+  updateLabel: (label: Label) => Promise<void>;
+  deleteLabel: (labelId: string) => Promise<void>;
 
   /**
    * Backup
    */
-  exportBackup: () => void;
-  importBackup: (data: unknown) => boolean;
+  exportBackup: () => Promise<void>;
+  importBackup: (data: unknown) => Promise<boolean>;
+
+  /**
+   * Initialization
+   */
+  initialize: () => Promise<void>;
 };
 
 /**
@@ -82,8 +98,8 @@ type DomainState = {
  * =========================
  */
 export const useDomainStore = create<DomainState>((set, get) => ({
-  cards: restoreCards(),
-  labels: restoreLabels(),
+  cards: [],
+  labels: [],
 
   /**
    * -------- Label Filter --------
@@ -100,7 +116,7 @@ export const useDomainStore = create<DomainState>((set, get) => ({
   /**
    * -------- Card --------
    */
-  addCard: (input) => {
+  addCard: async (input) => {
     const parsed = CreateCardInputSchema.safeParse(input);
     if (!parsed.success) {
       console.error(parsed.error);
@@ -126,12 +142,14 @@ export const useDomainStore = create<DomainState>((set, get) => ({
 
     set((state) => {
       const next = [...state.cards, validated.data];
-      saveCards(next);
+      saveCards(next).catch((error) => {
+        console.error('Error saving cards:', error);
+      });
       return { cards: next };
     });
   },
 
-  updateCard: (input) => {
+  updateCard: async (input) => {
     const parsed = UpdateCardInputSchema.safeParse(input);
     if (!parsed.success) {
       console.error(parsed.error);
@@ -148,22 +166,27 @@ export const useDomainStore = create<DomainState>((set, get) => ({
             }
           : card
       );
-      saveCards(next);
+      saveCards(next).catch((error) => {
+        console.error('Error saving cards:', error);
+      });
       return { cards: next };
     });
   },
 
-  deleteCard: (cardId) =>
+  deleteCard: async (cardId) => {
     set((state) => {
       const next = state.cards.filter((card) => card.id !== cardId);
-      saveCards(next);
+      saveCards(next).catch((error) => {
+        console.error('Error saving cards:', error);
+      });
       return { cards: next };
-    }),
+    });
+  },
 
   /**
    * -------- Label --------
    */
-  addLabel: (label) =>
+  addLabel: async (label) => {
     set((state) => {
       const color =
         label.color ?? generateUniqueLabelColor(state.labels.length);
@@ -181,12 +204,15 @@ export const useDomainStore = create<DomainState>((set, get) => ({
       }
 
       const next = [...state.labels, parsed.data];
-      saveLabels(next);
+      saveLabels(next).catch((error) => {
+        console.error('Error saving labels:', error);
+      });
 
       return { labels: next };
-    }),
+    });
+  },
 
-  updateLabel: (label) => {
+  updateLabel: async (label) => {
     const parsed = LabelSchema.safeParse(label);
     if (!parsed.success) {
       console.error(parsed.error);
@@ -197,12 +223,14 @@ export const useDomainStore = create<DomainState>((set, get) => ({
       const next = state.labels.map((l) =>
         l.id === parsed.data.id ? parsed.data : l
       );
-      saveLabels(next);
+      saveLabels(next).catch((error) => {
+        console.error('Error saving labels:', error);
+      });
       return { labels: next };
     });
   },
 
-  deleteLabel: (labelId) =>
+  deleteLabel: async (labelId) => {
     set((state) => {
       const nextLabels = state.labels.filter((label) => label.id !== labelId);
 
@@ -211,20 +239,25 @@ export const useDomainStore = create<DomainState>((set, get) => ({
         labelIds: card.labelIds.filter((id) => id !== labelId),
       }));
 
-      saveLabels(nextLabels);
-      saveCards(nextCards);
+      saveLabels(nextLabels).catch((error) => {
+        console.error('Error saving labels:', error);
+      });
+      saveCards(nextCards).catch((error) => {
+        console.error('Error saving cards:', error);
+      });
 
       return {
         labels: nextLabels,
         cards: nextCards,
         selectedLabelIds: state.selectedLabelIds.filter((id) => id !== labelId),
       };
-    }),
+    });
+  },
 
   /**
    * -------- Backup --------
    */
-  exportBackup: () => {
+  exportBackup: async () => {
     const { cards, labels } = get();
 
     const backup = {
@@ -246,7 +279,7 @@ export const useDomainStore = create<DomainState>((set, get) => ({
     URL.revokeObjectURL(url);
   },
 
-  importBackup: (data) => {
+  importBackup: async (data) => {
     const parsed = BackupSchema.safeParse(data);
 
     if (!parsed.success) {
@@ -256,15 +289,41 @@ export const useDomainStore = create<DomainState>((set, get) => ({
 
     const { cards, labels } = parsed.data;
 
-    saveCards(cards);
-    saveLabels(labels);
+    try {
+      await saveCards(cards);
+      await saveLabels(labels);
 
-    set({
-      cards,
-      labels,
-      selectedLabelIds: [],
-    });
+      set({
+        cards,
+        labels,
+        selectedLabelIds: [],
+      });
 
-    return true;
+      return true;
+    } catch (error) {
+      console.error('Error importing backup:', error);
+      return false;
+    }
+  },
+
+  /**
+   * -------- Initialization --------
+   */
+  initialize: async () => {
+    try {
+      // localStorageからIndexedDBへの移行を試行
+      await migrateFromLocalStorage();
+
+      // データを読み込む
+      const labels = await restoreLabels();
+      const cards = await restoreCards();
+
+      set({
+        labels,
+        cards,
+      });
+    } catch (error) {
+      console.error('Error initializing store:', error);
+    }
   },
 }));

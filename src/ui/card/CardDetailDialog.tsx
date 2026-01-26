@@ -58,10 +58,10 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
     card.labelIds.includes(label.id)
   );
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
 
-    updateCard({
+    await updateCard({
       id: card.id,
       title: title.trim(),
       body: body.trim(),
@@ -84,8 +84,8 @@ export const CardDetailDialog = ({ open, onClose, card }: Props) => {
     onClose();
   };
 
-  const handleDelete = () => {
-    deleteCard(card.id);
+  const handleDelete = async () => {
+    await deleteCard(card.id);
     setDeleteConfirmOpen(false);
     onClose();
   };

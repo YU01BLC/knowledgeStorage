@@ -22,10 +22,10 @@ export const LabelManageDialog = ({ open, onClose }: Props) => {
 
   const [newLabelName, setNewLabelName] = useState('');
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newLabelName.trim()) return;
 
-    addLabel({
+    await addLabel({
       id: generateId(),
       name: newLabelName.trim(),
     });

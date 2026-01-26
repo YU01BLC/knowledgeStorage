@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card } from '../../domain/schema';
 
 type UseCardFormOptions = {
@@ -18,20 +18,37 @@ export const useCardForm = ({
   const [body, setBody] = useState(initialBody);
   const [labelIds, setLabelIds] = useState<string[]>(initialLabelIds);
   const [titleError, setTitleError] = useState(false);
+  
+  // 前回のcard.idとupdatedAtを保持して、変更時のみ更新
+  const prevCardIdRef = useRef<string | undefined>(card?.id);
+  const prevUpdatedAtRef = useRef<number | undefined>(card?.updatedAt);
 
   // カードが変更されたときにフォームをリセット
   useEffect(() => {
-    if (card) {
-      setTitle(card.title);
-      setBody(card.body);
-      setLabelIds(card.labelIds);
-    } else {
-      setTitle(initialTitle);
-      setBody(initialBody);
-      setLabelIds(initialLabelIds);
+    const currentCardId = card?.id;
+    const currentUpdatedAt = card?.updatedAt;
+    
+    // card.idまたはupdatedAtが変更された場合のみ更新
+    if (
+      prevCardIdRef.current !== currentCardId ||
+      prevUpdatedAtRef.current !== currentUpdatedAt
+    ) {
+      prevCardIdRef.current = currentCardId;
+      prevUpdatedAtRef.current = currentUpdatedAt;
+      
+      if (card) {
+        setTitle(card.title);
+        setBody(card.body);
+        setLabelIds(card.labelIds);
+      } else {
+        setTitle(initialTitle);
+        setBody(initialBody);
+        setLabelIds(initialLabelIds);
+      }
+      setTitleError(false);
     }
-    setTitleError(false);
-  }, [card, initialTitle, initialBody, initialLabelIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card?.id, card?.updatedAt]);
 
   // 編集差分検知（dirty 判定）
   const isDirty = useMemo(() => {

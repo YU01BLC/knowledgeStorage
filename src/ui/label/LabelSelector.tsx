@@ -43,12 +43,12 @@ export const LabelSelector = ({ value, onChange }: Props) => {
   }, [inputValue, labels]);
 
   /** 作成 & 即付与 */
-  const createAndAttach = () => {
+  const createAndAttach = async () => {
     const name = inputValue.trim();
     if (!canCreate) return;
 
     const id = crypto.randomUUID();
-    addLabel({ id, name });
+    await addLabel({ id, name });
 
     onChange([...value, id]);
     setInputValue('');
