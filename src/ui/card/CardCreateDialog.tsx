@@ -68,7 +68,18 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
 
   return (
     <>
-      <Dialog open={open} onClose={handleClose} fullWidth maxWidth='sm'>
+      <Dialog
+        open={open}
+        onClose={(_, reason) => {
+          if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
+            return;
+          }
+          handleClose();
+        }}
+        disableEscapeKeyDown
+        fullWidth
+        maxWidth='sm'
+      >
         <form onSubmit={handleSubmit}>
           <DialogTitle>カード作成</DialogTitle>
 
@@ -126,6 +137,7 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
         title='カードを作成しますか？'
         message='この内容でカードを作成します。'
         confirmLabel='作成'
+        tone='info'
         onConfirm={handleConfirmCreate}
         onCancel={handleCancelConfirm}
       />

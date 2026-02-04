@@ -8,12 +8,14 @@ import {
   Stack,
 } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 type Props = {
   open: boolean;
   title: string;
   message: string;
   confirmLabel: string;
+  tone?: 'warning' | 'info';
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -23,9 +25,12 @@ export const ConfirmDialog = ({
   title,
   message,
   confirmLabel,
+  tone = 'warning',
   onConfirm,
   onCancel,
 }: Props) => {
+  const isInfo = tone === 'info';
+
   return (
     <Dialog
       open={open}
@@ -35,7 +40,11 @@ export const ConfirmDialog = ({
     >
       <DialogTitle>
         <Stack direction="row" spacing={1.5} alignItems="center">
-          <WarningAmberIcon color="error" />
+          {isInfo ? (
+            <InfoOutlinedIcon color="info" />
+          ) : (
+            <WarningAmberIcon color="error" />
+          )}
           <Typography variant="h6" fontWeight={600}>
             {title}
           </Typography>
@@ -59,7 +68,7 @@ export const ConfirmDialog = ({
         <Button
           onClick={onConfirm}
           variant="contained"
-          color="error"
+          color={isInfo ? 'primary' : 'error'}
         >
           {confirmLabel}
         </Button>
