@@ -2,6 +2,7 @@ import { useState, useContext } from 'react';
 import { Box, TextField, Button, IconButton } from '@mui/material';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
+import OutputIcon from '@mui/icons-material/Output';
 import { useTheme } from '@mui/material/styles';
 
 import { LabelFilter } from './LabelFilter';
@@ -24,10 +25,14 @@ export const Header = () => {
     setSelectedLabelIds,
     addLabel,
     exportBackup,
+    exportFilteredBackup,
     importBackup,
     searchText,
     setSearchText,
   } = useDomainStore();
+
+  const isFilterActive =
+    selectedLabelIds.length > 0 || searchText.trim() !== '';
 
   return (
     <Box display='flex' alignItems='center' gap={2} p={2} flexWrap='wrap'>
@@ -65,14 +70,26 @@ export const Header = () => {
 
       {/* 右寄せエリア */}
       <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-        <Button
-          variant='outlined'
-          onClick={async () => {
-            await exportBackup();
-          }}
-        >
-          バックアップ
-        </Button>
+        {isFilterActive ? (
+          <Button
+            variant='outlined'
+            startIcon={<OutputIcon />}
+            onClick={async () => {
+              await exportFilteredBackup();
+            }}
+          >
+            出力
+          </Button>
+        ) : (
+          <Button
+            variant='outlined'
+            onClick={async () => {
+              await exportBackup();
+            }}
+          >
+            バックアップ
+          </Button>
+        )}
 
         <Button component='label' variant='outlined'>
           復元

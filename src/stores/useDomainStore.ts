@@ -84,6 +84,7 @@ type DomainState = {
    * Backup
    */
   exportBackup: () => Promise<void>;
+  exportFilteredBackup: () => Promise<void>;
   importBackup: (data: unknown) => Promise<boolean>;
 
   /**
@@ -275,6 +276,44 @@ export const useDomainStore = create<DomainState>((set, get) => ({
     const a = document.createElement('a');
     a.href = url;
     a.download = `knowledge-backup-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  exportFilteredBackup: async () => {
+    const { cards, labels, selectedLabelIds, searchText } = get();
+    const normalizedSearch = searchText.trim();
+
+    const filteredCards = cards.filter((card) => {
+      const textMatch =
+        normalizedSearch === '' || card.title.includes(normalizedSearch);
+      const labelMatch =
+        selectedLabelIds.length === 0 ||
+        card.labelIds.some((id) => selectedLabelIds.includes(id));
+
+      return textMatch && labelMatch;
+    });
+
+    const labelIdSet = new Set(
+      filteredCards.flatMap((card) => card.labelIds)
+    );
+    const filteredLabels = labels.filter((label) => labelIdSet.has(label.id));
+
+    const backup = {
+      version: 1 as const,
+      exportedAt: Date.now(),
+      cards: filteredCards,
+      labels: filteredLabels,
+    };
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: 'application/json',
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `knowledge-backup-filtered-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   },
