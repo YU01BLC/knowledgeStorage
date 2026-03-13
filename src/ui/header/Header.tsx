@@ -11,6 +11,7 @@ import { LabelManageDialog } from '../label/LabelManageDialog';
 import { CardCreateButton } from '../card/CardCreateButton';
 import { ColorModeContext } from '../../theme/ColorModeContext';
 import { useDomainStore } from '../../stores/useDomainStore';
+import { useUIStore } from '../../stores/useUIStore';
 
 export const Header = () => {
   const theme = useTheme();
@@ -18,7 +19,6 @@ export const Header = () => {
 
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const [newLabelDialogOpen, setNewLabelDialogOpen] = useState(false);
-
   const {
     labels,
     selectedLabelIds,
@@ -30,6 +30,13 @@ export const Header = () => {
     searchText,
     setSearchText,
   } = useDomainStore();
+
+  const {
+    viewMode,
+    setViewMode,
+    setCurrentPage,
+    setDiagnosisModalOpen,
+  } = useUIStore();
 
   const isFilterActive =
     selectedLabelIds.length > 0 || searchText.trim() !== '';
@@ -48,76 +55,120 @@ export const Header = () => {
       {/* Search */}
       <TextField
         size='small'
-        placeholder='検索'
+        placeholder={viewMode === 'card' ? '検索' : '馬名検索'}
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
         sx={{ minWidth: 260 }}
       />
 
-      {/* Label Filter */}
-      <LabelFilter
-        labels={labels}
-        selectedLabelIds={selectedLabelIds}
-        onChange={setSelectedLabelIds}
-      />
+      {/* Label Filter（通常カードモードのみ） */}
+      {viewMode === 'card' && (
+        <LabelFilter
+          labels={labels}
+          selectedLabelIds={selectedLabelIds}
+          onChange={setSelectedLabelIds}
+        />
+      )}
 
-      {/* Label manage */}
-      <Button variant='contained' onClick={() => setLabelDialogOpen(true)}>
-        ラベル管理
-      </Button>
+      {/* Label manage（通常カードモードのみ） */}
+      {viewMode === 'card' && (
+        <Button variant='contained' onClick={() => setLabelDialogOpen(true)}>
+          ラベル管理
+        </Button>
+      )}
 
+      {/* Create Button: モードに応じて表示切り替え（現状は同じダイアログを利用） */}
       <CardCreateButton />
+
+      <Button
+        variant='outlined'
+        onClick={() => {
+          setCurrentPage('diagnosis');
+          setDiagnosisModalOpen(true);
+        }}
+      >
+        全頭診断
+      </Button>
 
       {/* 右寄せエリア */}
       <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-        {isFilterActive ? (
+        {/* ビューモード切替 */}
+        <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
-            variant='outlined'
-            startIcon={<OutputIcon />}
-            onClick={async () => {
-              await exportFilteredBackup();
+            variant={viewMode === 'card' ? 'contained' : 'outlined'}
+            onClick={() => {
+              setViewMode('card');
+              setCurrentPage('home');
+              setDiagnosisModalOpen(false);
             }}
           >
-            出力
+            通常カード
           </Button>
-        ) : (
           <Button
-            variant='outlined'
-            onClick={async () => {
-              await exportBackup();
+            variant={viewMode === 'horse' ? 'contained' : 'outlined'}
+            onClick={() => {
+              setViewMode('horse');
+              setCurrentPage('home');
+              setDiagnosisModalOpen(false);
             }}
           >
-            バックアップ
+            馬情報
           </Button>
+        </Box>
+
+        {/* バックアップ/復元（通常カードモードのみ） */}
+        {viewMode === 'card' && (
+          <>
+            {isFilterActive ? (
+              <Button
+                variant='outlined'
+                startIcon={<OutputIcon />}
+                onClick={async () => {
+                  await exportFilteredBackup();
+                }}
+              >
+                出力
+              </Button>
+            ) : (
+              <Button
+                variant='outlined'
+                onClick={async () => {
+                  await exportBackup();
+                }}
+              >
+                バックアップ
+              </Button>
+            )}
+
+            <Button component='label' variant='outlined'>
+              復元
+              <input
+                type='file'
+                hidden
+                accept='application/json'
+                onChange={async (e) => {
+                  const input = e.currentTarget;
+                  const file = input.files?.[0];
+                  if (!file) return;
+
+                  try {
+                    const text = await file.text();
+                    const json = JSON.parse(text);
+
+                    const success = await importBackup(json);
+                    if (!success) {
+                      alert('不正なバックアップファイルです');
+                    }
+                  } catch {
+                    alert('バックアップの読み込みに失敗しました');
+                  } finally {
+                    input.value = '';
+                  }
+                }}
+              />
+            </Button>
+          </>
         )}
-
-        <Button component='label' variant='outlined'>
-          復元
-          <input
-            type='file'
-            hidden
-            accept='application/json'
-            onChange={async (e) => {
-              const input = e.currentTarget;
-              const file = input.files?.[0];
-              if (!file) return;
-
-              try {
-                const text = await file.text();
-                const json = JSON.parse(text);
-
-                const success = await importBackup(json);
-                if (!success) {
-                  alert('不正なバックアップファイルです');
-                }
-              } catch {
-                alert('バックアップの読み込みに失敗しました');
-              } finally {
-                input.value = '';
-              }
-            }}
-          />
-        </Button>
       </Box>
 
       {/* Dialogs */}
@@ -133,6 +184,7 @@ export const Header = () => {
           await addLabel(label);
         }}
       />
+
     </Box>
   );
 };
