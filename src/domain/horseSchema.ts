@@ -46,4 +46,3 @@ export const UpdateHorseCardInputSchema = CreateHorseCardInputSchema.extend({
 });
 
 export type UpdateHorseCardInput = z.infer<typeof UpdateHorseCardInputSchema>;
-

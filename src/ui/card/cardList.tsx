@@ -1,16 +1,18 @@
 import { Grid, Stack } from '@mui/material';
 import { KnowledgeCard } from './card';
 import { useDomainStore } from '../../stores/useDomainStore';
+import { normalizeKana } from '../../utils/kana';
 
 export const KnowledgeCardList = () => {
   const { cards, selectedLabelIds, searchText } = useDomainStore();
 
-  const normalizedSearch = searchText.trim();
+  const normalizedSearch = normalizeKana(searchText);
 
   const filteredCards = cards.filter((card) => {
     // 🔍 検索（前後一致）
     const textMatch =
-      normalizedSearch === '' || card.title.includes(normalizedSearch);
+      normalizedSearch === '' ||
+      normalizeKana(card.title).includes(normalizedSearch);
     // 🏷 ラベルフィルタ（1つでも一致すればOK）
     const labelMatch =
       selectedLabelIds.length === 0 ||

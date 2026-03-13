@@ -13,14 +13,43 @@ import {
   Autocomplete,
   Collapse,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { useDomainStore } from '../../stores/useDomainStore';
+import { normalizeKana } from '../../utils/kana';
+import { DiagnosisPayload } from './types';
+
+const TRACK_TYPES = ['芝', 'ダート', '障害'] as const;
+const COURSE_DIRECTIONS = ['右回り', '左回り', '直線'] as const;
+const TRACK_CONFIGS = ['A', 'B', 'C', 'D'] as const;
+const TRACK_CONDITIONS = ['良', '稍重', '重', '不良'] as const;
+const PACE_OPTIONS = ['ハイ', 'ミドル', 'スロー'] as const;
+const RACE_CLASS_OPTIONS = [
+  '地方G以下',
+  '地方G',
+  '地方G3',
+  '地方G2',
+  '地方G1',
+  '新馬',
+  '未勝利',
+  '1勝',
+  '2勝',
+  '3勝',
+  'OP',
+  'L',
+  'G3',
+  'G2',
+  'G1',
+] as const;
+const FRAME_OPTIONS = Array.from({ length: 8 }, (_, i) => i + 1);
+const NUMBER_OPTIONS = Array.from({ length: 18 }, (_, i) => i + 1);
+const FINISH_OPTIONS = NUMBER_OPTIONS.map(String);
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onDiagnose: (results: ResultRow[]) => void;
+  onSubmitPayload: (payload: DiagnosisPayload) => void;
+  initialData?: DiagnosisPayload | null;
 };
 
 type RecentRace = {
@@ -28,6 +57,7 @@ type RecentRace = {
   cornerPassage: string;
   pace: string;
   distance?: string;
+  trackType?: string;
   track?: string;
   raceClass?: string;
 };
@@ -40,14 +70,8 @@ type Entry = {
   recentRaces: RecentRace[];
 };
 
-export type ResultRow = {
-  rating: string;
-  number: number | '';
-  horseName: string;
-  reason: string;
-};
-
-const cornerPassagePattern = /^(?:\d+(?:-\d+){1}|\d+(?:-\d+){3})$/;
+const cornerPassagePattern =
+  /^(?:\d+(?:-\d+){1}|\d+(?:-\d+){2}|\d+(?:-\d+){3})(?:\([^()]+\))?$/;
 
 const createRecentRaces = (): RecentRace[] => [
   {
@@ -55,6 +79,7 @@ const createRecentRaces = (): RecentRace[] => [
     cornerPassage: '',
     pace: '',
     distance: '',
+    trackType: '',
     track: '',
     raceClass: '',
   },
@@ -63,6 +88,7 @@ const createRecentRaces = (): RecentRace[] => [
     cornerPassage: '',
     pace: '',
     distance: '',
+    trackType: '',
     track: '',
     raceClass: '',
   },
@@ -71,10 +97,21 @@ const createRecentRaces = (): RecentRace[] => [
     cornerPassage: '',
     pace: '',
     distance: '',
+    trackType: '',
     track: '',
     raceClass: '',
   },
 ];
+
+const mergeRecentRaces = (
+  races: DiagnosisPayload['entries'][number]['recentRaces']
+) => {
+  const base = createRecentRaces();
+  return base.map((item, index) => ({
+    ...item,
+    ...races[index],
+  }));
+};
 
 const RaceInfoSchema = z.object({
   date: z.string().min(1),
@@ -100,14 +137,15 @@ type EntryErrors = {
 export const AllHorseDiagnosisDialog = ({
   open,
   onClose,
-  onDiagnose,
+  onSubmitPayload,
+  initialData = null,
 }: Props) => {
   const { horseCards } = useDomainStore();
 
   const [date, setDate] = useState('');
   const [course, setCourse] = useState('');
   const [raceName, setRaceName] = useState('');
-  const [trackType, setTrackType] = useState<'芝' | 'ダート' | ''>('');
+  const [trackType, setTrackType] = useState<'芝' | 'ダート' | '障害' | ''>('');
   const [distance, setDistance] = useState('');
   const [courseDirection, setCourseDirection] = useState<
     '右回り' | '左回り' | '直線' | ''
@@ -129,6 +167,97 @@ export const AllHorseDiagnosisDialog = ({
   ]);
   const [entryErrors, setEntryErrors] = useState<EntryErrors[]>([]);
   const [entryScoresOpen, setEntryScoresOpen] = useState<boolean[]>([false]);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  const STORAGE_KEY = 'all-horse-diagnosis-draft';
+
+  const buildDraftPayload = (): DiagnosisPayload => ({
+    raceInfo: {
+      date,
+      course,
+      raceName,
+      trackType,
+      distance,
+      courseDirection,
+      trackConfig: trackConfig === '' ? null : trackConfig,
+      trackCondition,
+      expectedPace: null,
+    },
+    entries: entries.map((entry) => ({
+      frame: entry.frame,
+      number: entry.number,
+      horseName: entry.horseName,
+      horseCardId: entry.horseCardId ?? null,
+      horseInfo: null,
+      recentRaces: entry.recentRaces.map((race) => ({
+        finish: race.finish,
+        distance: race.distance ?? '',
+        trackType: race.trackType ?? '',
+        track: race.track ?? '',
+        pace: race.pace,
+        cornerPassage: race.cornerPassage,
+        raceClass: race.raceClass ?? '',
+      })),
+    })),
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    if (!initialData) {
+      setDate('');
+      setCourse('');
+      setRaceName('');
+      setTrackType('');
+      setDistance('');
+      setCourseDirection('');
+      setTrackConfig('');
+      setTrackCondition('');
+      setEntries([
+        {
+          frame: 1,
+          number: 1,
+          horseName: '',
+          recentRaces: createRecentRaces(),
+        },
+      ]);
+      setEntryErrors([]);
+      setEntryScoresOpen([false]);
+      setRaceErrors({});
+      return;
+    }
+
+    setDate(initialData.raceInfo.date ?? '');
+    setCourse(initialData.raceInfo.course ?? '');
+    setRaceName(initialData.raceInfo.raceName ?? '');
+    setTrackType(
+      (initialData.raceInfo.trackType as '芝' | 'ダート' | '障害' | '') ?? ''
+    );
+    setDistance(initialData.raceInfo.distance ?? '');
+    setCourseDirection(
+      (initialData.raceInfo.courseDirection as '右回り' | '左回り' | '直線' | '') ??
+        ''
+    );
+    setTrackConfig(
+      (initialData.raceInfo.trackConfig as 'A' | 'B' | 'C' | 'D' | '') ?? ''
+    );
+    setTrackCondition(
+      (initialData.raceInfo.trackCondition as '良' | '稍重' | '重' | '不良' | '') ??
+        ''
+    );
+
+    setEntries(
+      initialData.entries.map((entry) => ({
+        frame: entry.frame,
+        number: entry.number,
+        horseName: entry.horseName,
+        horseCardId: entry.horseCardId ?? undefined,
+        recentRaces: mergeRecentRaces(entry.recentRaces),
+      }))
+    );
+    setEntryErrors([]);
+    setEntryScoresOpen(initialData.entries.map(() => false));
+    setRaceErrors({});
+  }, [open, initialData]);
 
   const handleChangeEntry =
     <K extends keyof Entry>(index: number, key: K) =>
@@ -218,7 +347,8 @@ export const AllHorseDiagnosisDialog = ({
           race.cornerPassage &&
           !cornerPassagePattern.test(race.cornerPassage)
         ) {
-          raceErrors.cornerPassage = '形式: X-X または X-X-X-X';
+          raceErrors.cornerPassage =
+            '形式: X-X / X-X-X / X-X-X-X / X-X-X-X(注記)';
         }
         return raceErrors;
       });
@@ -234,7 +364,7 @@ export const AllHorseDiagnosisDialog = ({
     setEntryErrors(nextEntryErrors);
     if (hasEntryErrors) return;
 
-    const raceInfoPayload = {
+    const raceInfoPayload: DiagnosisPayload['raceInfo'] = {
       date,
       course,
       raceName,
@@ -243,9 +373,10 @@ export const AllHorseDiagnosisDialog = ({
       courseDirection,
       trackConfig: trackConfig === '' ? null : trackConfig,
       trackCondition,
+      expectedPace: null,
     };
 
-    const entriesPayload = entries.map((entry) => {
+    const entriesPayload: DiagnosisPayload['entries'] = entries.map((entry) => {
       const horseCard =
         horseCards.find((c) => c.id === entry.horseCardId) ??
         horseCards.find((c) => c.name === entry.horseName);
@@ -267,6 +398,7 @@ export const AllHorseDiagnosisDialog = ({
           .map((race) => ({
             finish: race.finish,
             distance: race.distance ?? '',
+            trackType: race.trackType ?? '',
             track: race.track ?? '',
             pace: race.pace,
             cornerPassage: race.cornerPassage,
@@ -284,23 +416,67 @@ export const AllHorseDiagnosisDialog = ({
       };
     });
 
-    const payload = {
+    const payload: DiagnosisPayload = {
       raceInfo: raceInfoPayload,
       entries: entriesPayload,
     };
 
-    console.log('[AllHorseDiagnosis] payload', JSON.stringify(payload, null, 2));
-
-    const nextResults: ResultRow[] = entries
-      .filter((e) => e.number && e.horseName)
-      .map((e) => ({
-        rating: '',
-        number: e.number,
-        horseName: e.horseName,
-        reason: '',
-      }));
-    onDiagnose(nextResults);
+    onSubmitPayload(payload);
     onClose();
+  };
+
+  const handleSaveDraft = () => {
+    try {
+      const payload = buildDraftPayload();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      setSaveMessage('保存しました');
+    } catch {
+      setSaveMessage('保存に失敗しました');
+    }
+  };
+
+  const handleApplyDraft = () => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      setSaveMessage('保存データがありません');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as DiagnosisPayload;
+      setDate(parsed.raceInfo.date ?? '');
+      setCourse(parsed.raceInfo.course ?? '');
+      setRaceName(parsed.raceInfo.raceName ?? '');
+      setTrackType(
+        (parsed.raceInfo.trackType as '芝' | 'ダート' | '障害' | '') ?? ''
+      );
+      setDistance(parsed.raceInfo.distance ?? '');
+      setCourseDirection(
+        (parsed.raceInfo.courseDirection as '右回り' | '左回り' | '直線' | '') ??
+          ''
+      );
+      setTrackConfig(
+        (parsed.raceInfo.trackConfig as 'A' | 'B' | 'C' | 'D' | '') ?? ''
+      );
+      setTrackCondition(
+        (parsed.raceInfo.trackCondition as '良' | '稍重' | '重' | '不良' | '') ??
+          ''
+      );
+      setEntries(
+        parsed.entries.map((entry) => ({
+          frame: entry.frame,
+          number: entry.number,
+          horseName: entry.horseName,
+          horseCardId: entry.horseCardId ?? undefined,
+          recentRaces: mergeRecentRaces(entry.recentRaces),
+        }))
+      );
+      setEntryErrors([]);
+      setEntryScoresOpen(parsed.entries.map(() => false));
+      setRaceErrors({});
+      setSaveMessage('反映しました');
+    } catch {
+      setSaveMessage('保存データの読み込みに失敗しました');
+    }
   };
 
   const handleClose = () => {
@@ -337,7 +513,7 @@ export const AllHorseDiagnosisDialog = ({
               レース情報
             </Typography>
 
-            {/* 1行目: 日付 / 会場 / レース名 / 馬場種別 */}
+            {/* 1行目: 日付 / 会場 / レース名 / コース種別 */}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
               <Box sx={{ width: 200 }}>
                 <TextField
@@ -395,10 +571,12 @@ export const AllHorseDiagnosisDialog = ({
               <Box sx={{ width: 160 }}>
                 <TextField
                   select
-                  label='馬場種別'
+                  label='コース種別'
                   value={trackType}
                   onChange={(e) => {
-                    setTrackType(e.target.value as '芝' | 'ダート' | '');
+                    setTrackType(
+                      e.target.value as '芝' | 'ダート' | '障害' | ''
+                    );
                     if (raceErrors.trackType) {
                       setRaceErrors((prev) => ({
                         ...prev,
@@ -411,8 +589,11 @@ export const AllHorseDiagnosisDialog = ({
                   helperText={raceErrors.trackType}
                   fullWidth
                 >
-                  <MenuItem value='芝'>芝</MenuItem>
-                  <MenuItem value='ダート'>ダート</MenuItem>
+                  {TRACK_TYPES.map((value) => (
+                    <MenuItem key={value} value={value}>
+                      {value}
+                    </MenuItem>
+                  ))}
                 </TextField>
               </Box>
             </Box>
@@ -464,9 +645,11 @@ export const AllHorseDiagnosisDialog = ({
                   helperText={raceErrors.courseDirection}
                   fullWidth
                 >
-                  <MenuItem value='右回り'>右回り</MenuItem>
-                  <MenuItem value='左回り'>左回り</MenuItem>
-                  <MenuItem value='直線'>直線</MenuItem>
+                  {COURSE_DIRECTIONS.map((value) => (
+                    <MenuItem key={value} value={value}>
+                      {value}
+                    </MenuItem>
+                  ))}
                 </TextField>
               </Box>
               <Box sx={{ width: 160 }}>
@@ -481,10 +664,11 @@ export const AllHorseDiagnosisDialog = ({
                   fullWidth
                 >
                   <MenuItem value=''>未設定</MenuItem>
-                  <MenuItem value='A'>A</MenuItem>
-                  <MenuItem value='B'>B</MenuItem>
-                  <MenuItem value='C'>C</MenuItem>
-                  <MenuItem value='D'>D</MenuItem>
+                  {TRACK_CONFIGS.map((value) => (
+                    <MenuItem key={value} value={value}>
+                      {value}
+                    </MenuItem>
+                  ))}
                 </TextField>
               </Box>
               <Box sx={{ width: 260 }}>
@@ -508,10 +692,11 @@ export const AllHorseDiagnosisDialog = ({
                   helperText={raceErrors.trackCondition}
                   fullWidth
                 >
-                  <MenuItem value='良'>良</MenuItem>
-                  <MenuItem value='稍重'>稍重</MenuItem>
-                  <MenuItem value='重'>重</MenuItem>
-                  <MenuItem value='不良'>不良</MenuItem>
+                  {TRACK_CONDITIONS.map((value) => (
+                    <MenuItem key={value} value={value}>
+                      {value}
+                    </MenuItem>
+                  ))}
                 </TextField>
               </Box>
             </Box>
@@ -548,13 +733,11 @@ export const AllHorseDiagnosisDialog = ({
                         required
                         fullWidth
                       >
-                        {Array.from({ length: 8 }, (_, i) => i + 1).map(
-                          (value) => (
-                            <MenuItem key={value} value={value}>
-                              {value}
-                            </MenuItem>
-                          )
-                        )}
+                        {FRAME_OPTIONS.map((value) => (
+                          <MenuItem key={value} value={value}>
+                            {value}
+                          </MenuItem>
+                        ))}
                       </TextField>
                     </Box>
                     <Box sx={{ width: 110 }}>
@@ -572,13 +755,11 @@ export const AllHorseDiagnosisDialog = ({
                         required
                         fullWidth
                       >
-                        {Array.from({ length: 18 }, (_, i) => i + 1).map(
-                          (value) => (
-                            <MenuItem key={value} value={value}>
-                              {value}
-                            </MenuItem>
-                          )
-                        )}
+                        {NUMBER_OPTIONS.map((value) => (
+                          <MenuItem key={value} value={value}>
+                            {value}
+                          </MenuItem>
+                        ))}
                       </TextField>
                     </Box>
                     <Box sx={{ minWidth: 260, flex: 1 }}>
@@ -592,6 +773,13 @@ export const AllHorseDiagnosisDialog = ({
                         onInputChange={(_, value) =>
                           handleHorseNameChange(index, value)
                         }
+                        filterOptions={(options, params) => {
+                          const input = normalizeKana(params.inputValue);
+                          if (!input) return options;
+                          return options.filter((name) =>
+                            normalizeKana(name).includes(input)
+                          );
+                        }}
                         renderInput={(params) => (
                           <TextField
                             {...params}
@@ -661,13 +849,11 @@ export const AllHorseDiagnosisDialog = ({
                                   fullWidth
                                 >
                                   <MenuItem value=''>未設定</MenuItem>
-                                  {Array.from({ length: 18 }, (_, i) => i + 1).map(
-                                    (value) => (
-                                      <MenuItem key={value} value={String(value)}>
-                                        {value}
-                                      </MenuItem>
-                                    )
-                                  )}
+                                  {FINISH_OPTIONS.map((value) => (
+                                    <MenuItem key={value} value={value}>
+                                      {value}
+                                    </MenuItem>
+                                  ))}
                                 </TextField>
                               </Box>
                               <Box sx={{ width: 110 }}>
@@ -694,7 +880,32 @@ export const AllHorseDiagnosisDialog = ({
                                   }}
                                 />
                               </Box>
-                              <Box sx={{ width: 90 }}>
+                              <Box sx={{ width: 140 }}>
+                                <TextField
+                                  select
+                                  label='コース種別'
+                                  value={race.trackType ?? ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    handleChangeEntry(index, 'recentRaces')(
+                                      entry.recentRaces.map((r, i) =>
+                                        i === raceIndex
+                                          ? { ...r, trackType: value }
+                                          : r
+                                      )
+                                    );
+                                  }}
+                                  fullWidth
+                                >
+                                  <MenuItem value=''>未設定</MenuItem>
+                                  {TRACK_TYPES.map((value) => (
+                                    <MenuItem key={value} value={value}>
+                                      {value}
+                                    </MenuItem>
+                                  ))}
+                                </TextField>
+                              </Box>
+                              <Box sx={{ width: 120 }}>
                                 <TextField
                                   select
                                   label='馬場'
@@ -712,11 +923,14 @@ export const AllHorseDiagnosisDialog = ({
                                   fullWidth
                                 >
                                   <MenuItem value=''>未設定</MenuItem>
-                                  <MenuItem value='芝'>芝</MenuItem>
-                                  <MenuItem value='ダート'>ダート</MenuItem>
+                                  {TRACK_CONDITIONS.map((value) => (
+                                    <MenuItem key={value} value={value}>
+                                      {value}
+                                    </MenuItem>
+                                  ))}
                                 </TextField>
                               </Box>
-                              <Box sx={{ width: 90 }}>
+                              <Box sx={{ width: 110 }}>
                                 <TextField
                                   select
                                   label='ペース'
@@ -734,9 +948,11 @@ export const AllHorseDiagnosisDialog = ({
                                   fullWidth
                                 >
                                   <MenuItem value=''>未設定</MenuItem>
-                                  <MenuItem value='ハイ'>ハイ</MenuItem>
-                                  <MenuItem value='ミドル'>ミドル</MenuItem>
-                                  <MenuItem value='スロー'>スロー</MenuItem>
+                                  {PACE_OPTIONS.map((value) => (
+                                    <MenuItem key={value} value={value}>
+                                      {value}
+                                    </MenuItem>
+                                  ))}
                                 </TextField>
                               </Box>
                               <Box sx={{ width: 140 }}>
@@ -765,7 +981,7 @@ export const AllHorseDiagnosisDialog = ({
                                   }
                                 />
                               </Box>
-                              <Box sx={{ width: 120 }}>
+                              <Box sx={{ width: 140 }}>
                                 <TextField
                                   select
                                   label='クラス'
@@ -783,16 +999,11 @@ export const AllHorseDiagnosisDialog = ({
                                   fullWidth
                                 >
                                   <MenuItem value=''>未設定</MenuItem>
-                                  <MenuItem value='新馬'>新馬</MenuItem>
-                                  <MenuItem value='未勝利'>未勝利</MenuItem>
-                                  <MenuItem value='1勝'>1勝</MenuItem>
-                                  <MenuItem value='2勝'>2勝</MenuItem>
-                                  <MenuItem value='3勝'>3勝</MenuItem>
-                                  <MenuItem value='OP'>OP</MenuItem>
-                                  <MenuItem value='L'>L</MenuItem>
-                                  <MenuItem value='G3'>G3</MenuItem>
-                                  <MenuItem value='G2'>G2</MenuItem>
-                                  <MenuItem value='G1'>G1</MenuItem>
+                                  {RACE_CLASS_OPTIONS.map((value) => (
+                                    <MenuItem key={value} value={value}>
+                                      {value}
+                                    </MenuItem>
+                                  ))}
                                 </TextField>
                               </Box>
                             </Box>
@@ -815,6 +1026,17 @@ export const AllHorseDiagnosisDialog = ({
         </Stack>
       </DialogContent>
       <DialogActions>
+        {saveMessage && (
+          <Typography variant='caption' color='text.secondary' sx={{ mr: 1 }}>
+            {saveMessage}
+          </Typography>
+        )}
+        <Button variant='outlined' onClick={handleSaveDraft}>
+          一時保存
+        </Button>
+        <Button variant='outlined' onClick={handleApplyDraft}>
+          保存を反映
+        </Button>
         <Button onClick={handleClose}>閉じる</Button>
         <Button variant='contained' onClick={handleDiagnose}>
           診断する

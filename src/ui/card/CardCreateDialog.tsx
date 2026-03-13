@@ -8,13 +8,15 @@ import {
   Stack,
   Typography,
   Box,
-  Chip,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDomainStore } from '../../stores/useDomainStore';
 import { LabelSelector } from '../label/LabelSelector';
 import { useCardForm } from './useCardForm';
 import { ConfirmDialog } from './ConfirmDialog';
+import { PedigreeSelector } from '../pedigree/PedigreeSelector';
+import { OffspringSelector } from '../offspring/OffspringSelector';
+import { useUIStore } from '../../stores/useUIStore';
 
 type Props = {
   open: boolean;
@@ -22,7 +24,9 @@ type Props = {
 };
 
 export const CardCreateDialog = ({ open, onClose }: Props) => {
-  const { addCard, addHorseCard } = useDomainStore();
+  const { addCard, addHorseCard, ensurePedigreeNames, ensureOffspringNames } =
+    useDomainStore();
+  const viewMode = useUIStore((s) => s.viewMode);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const [mode, setMode] = useState<'card' | 'horse'>('card');
@@ -31,8 +35,7 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
   const [sire, setSire] = useState('');
   const [dam, setDam] = useState('');
   const [damSire, setDamSire] = useState('');
-  const [offspringNames, setOffspringNames] = useState<string[]>([]);
-  const [offspringInput, setOffspringInput] = useState('');
+  const [offspringName, setOffspringName] = useState('');
 
   const {
     title,
@@ -47,12 +50,16 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
     validate,
   } = useCardForm();
 
+  useEffect(() => {
+    if (!open) return;
+    setMode(viewMode === 'horse' ? 'horse' : 'card');
+  }, [open, viewMode]);
+
   const resetHorseFields = () => {
     setSire('');
     setDam('');
     setDamSire('');
-    setOffspringNames([]);
-    setOffspringInput('');
+    setOffspringName('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,12 +86,17 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
         labelIds,
       });
     } else {
+      const pedigreeCandidates = [sire, dam, damSire];
+      const offspringCandidates = [offspringName];
+      await ensurePedigreeNames(pedigreeCandidates);
+      await ensureOffspringNames(offspringCandidates);
+
       await addHorseCard({
         name: title.trim(),
         sire: sire.trim() || undefined,
         dam: dam.trim() || undefined,
         damSire: damSire.trim() || undefined,
-        offspringNames,
+        offspringNames: offspringName.trim() ? [offspringName.trim()] : [],
       });
     }
 
@@ -97,17 +109,6 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
 
   const handleCancelConfirm = () => {
     setConfirmOpen(false);
-  };
-
-  const handleAddOffspring = () => {
-    const name = offspringInput.trim();
-    if (!name) return;
-    if (offspringNames.includes(name)) {
-      setOffspringInput('');
-      return;
-    }
-    setOffspringNames([...offspringNames, name]);
-    setOffspringInput('');
   };
 
   return (
@@ -206,59 +207,29 @@ export const CardCreateDialog = ({ open, onClose }: Props) => {
                   />
 
                   <Stack spacing={2}>
-                    <TextField
+                    <PedigreeSelector
                       label='父'
                       value={sire}
-                      onChange={(e) => setSire(e.target.value)}
-                      fullWidth
+                      onChange={setSire}
                     />
-                    <TextField
+                    <PedigreeSelector
                       label='母'
                       value={dam}
-                      onChange={(e) => setDam(e.target.value)}
-                      fullWidth
+                      onChange={setDam}
                     />
-                    <TextField
+                    <PedigreeSelector
                       label='母父'
                       value={damSire}
-                      onChange={(e) => setDamSire(e.target.value)}
-                      fullWidth
+                      onChange={setDamSire}
                     />
                   </Stack>
 
                   <Stack spacing={1}>
-                    <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>
-                      産駒
-                    </Typography>
-                    <TextField
-                      label='産駒を追加'
-                      placeholder='産駒名を入力してEnterで追加'
-                      value={offspringInput}
-                      onChange={(e) => setOffspringInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddOffspring();
-                        }
-                      }}
-                      fullWidth
+                    <OffspringSelector
+                      label='生産'
+                      value={offspringName}
+                      onChange={setOffspringName}
                     />
-                    {offspringNames.length > 0 && (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {offspringNames.map((name) => (
-                          <Chip
-                            key={name}
-                            label={name}
-                            onDelete={() =>
-                              setOffspringNames(
-                                offspringNames.filter((n) => n !== name)
-                              )
-                            }
-                            size='small'
-                          />
-                        ))}
-                      </Box>
-                    )}
                   </Stack>
                 </>
               )}
