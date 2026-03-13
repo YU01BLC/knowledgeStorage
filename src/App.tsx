@@ -5,11 +5,16 @@ import { getTheme } from './theme/theme';
 import { AppLayout } from './ui/layout/AppLayout';
 import { Header } from './ui/header/Header';
 import { KnowledgeCardList } from './ui/card/cardList';
+import { HorseCardList } from './ui/horse/HorseCardList';
+import { AllHorseDiagnosisPage } from './ui/diagnosis/AllHorseDiagnosisPage';
 import { useDomainStore } from './stores/useDomainStore';
+import { useUIStore } from './stores/useUIStore';
 
 export default function App() {
   const [mode, setMode] = useState<'light' | 'dark'>('dark');
   const initialize = useDomainStore((state) => state.initialize);
+  const viewMode = useUIStore((state) => state.viewMode);
+  const currentPage = useUIStore((state) => state.currentPage);
 
   useEffect(() => {
     initialize().catch((error) => {
@@ -33,7 +38,13 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AppLayout header={<Header />}>
-          <KnowledgeCardList />
+          {currentPage === 'diagnosis' ? (
+            <AllHorseDiagnosisPage />
+          ) : viewMode === 'card' ? (
+            <KnowledgeCardList />
+          ) : (
+            <HorseCardList />
+          )}
         </AppLayout>
       </ThemeProvider>
     </ColorModeContext.Provider>

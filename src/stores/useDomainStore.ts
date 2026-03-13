@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import { z } from 'zod';
 import { Card, CardSchema, Label, LabelSchema } from '../domain/schema';
 import {
+  HorseCard,
+  HorseCardSchema,
+  CreateHorseCardInput,
+  CreateHorseCardInputSchema,
+  UpdateHorseCardInput,
+  UpdateHorseCardInputSchema,
+} from '../domain/horseSchema';
+import {
   CreateCardInput,
   CreateCardInputSchema,
   UpdateCardInput,
@@ -14,6 +22,8 @@ import {
   saveLabels,
   loadCards,
   saveCards,
+  loadHorseCards,
+  saveHorseCards,
 } from '../domain/indexedDB';
 import { migrateFromLocalStorage } from '../domain/migrateFromLocalStorage';
 import { BackupSchema } from '../domain/backupSchema';
@@ -53,6 +63,7 @@ const restoreCards = async (): Promise<Card[]> => {
 type DomainState = {
   cards: Card[];
   labels: Label[];
+  horseCards: HorseCard[];
 
   /**
    * Label Filter (UI State)
@@ -72,6 +83,13 @@ type DomainState = {
   addCard: (input: CreateCardInput) => Promise<void>;
   updateCard: (input: UpdateCardInput) => Promise<void>;
   deleteCard: (cardId: string) => Promise<void>;
+
+  /**
+   * HorseCard CRUD
+   */
+  addHorseCard: (input: CreateHorseCardInput) => Promise<void>;
+  updateHorseCard: (input: UpdateHorseCardInput) => Promise<void>;
+  deleteHorseCard: (cardId: string) => Promise<void>;
 
   /**
    * Label CRUD
@@ -101,6 +119,7 @@ type DomainState = {
 export const useDomainStore = create<DomainState>((set, get) => ({
   cards: [],
   labels: [],
+  horseCards: [],
 
   /**
    * -------- Label Filter --------
@@ -181,6 +200,78 @@ export const useDomainStore = create<DomainState>((set, get) => ({
         console.error('Error saving cards:', error);
       });
       return { cards: next };
+    });
+  },
+
+  /**
+   * -------- HorseCard --------
+   */
+  addHorseCard: async (input) => {
+    const parsed = CreateHorseCardInputSchema.safeParse(input);
+    if (!parsed.success) {
+      console.error(parsed.error);
+      return;
+    }
+
+    const now = Date.now();
+
+    const horseCard: HorseCard = {
+      id: generateId(),
+      name: parsed.data.name,
+      sire: parsed.data.sire,
+      dam: parsed.data.dam,
+      damSire: parsed.data.damSire,
+      offspringNames: parsed.data.offspringNames,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const validated = HorseCardSchema.safeParse(horseCard);
+    if (!validated.success) {
+      console.error(validated.error);
+      return;
+    }
+
+    set((state) => {
+      const next = [...state.horseCards, validated.data];
+      saveHorseCards(next).catch((error) => {
+        console.error('Error saving horse cards:', error);
+      });
+      return { horseCards: next };
+    });
+  },
+
+  updateHorseCard: async (input) => {
+    const parsed = UpdateHorseCardInputSchema.safeParse(input);
+    if (!parsed.success) {
+      console.error(parsed.error);
+      return;
+    }
+
+    set((state) => {
+      const next = state.horseCards.map((card) =>
+        card.id === parsed.data.id
+          ? {
+              ...card,
+              ...parsed.data,
+              updatedAt: Date.now(),
+            }
+          : card
+      );
+      saveHorseCards(next).catch((error) => {
+        console.error('Error saving horse cards:', error);
+      });
+      return { horseCards: next };
+    });
+  },
+
+  deleteHorseCard: async (cardId) => {
+    set((state) => {
+      const next = state.horseCards.filter((card) => card.id !== cardId);
+      saveHorseCards(next).catch((error) => {
+        console.error('Error saving horse cards:', error);
+      });
+      return { horseCards: next };
     });
   },
 
@@ -356,10 +447,12 @@ export const useDomainStore = create<DomainState>((set, get) => ({
       // データを読み込む
       const labels = await restoreLabels();
       const cards = await restoreCards();
+      const horseCards = await loadHorseCards();
 
       set({
         labels,
         cards,
+        horseCards,
       });
     } catch (error) {
       console.error('Error initializing store:', error);

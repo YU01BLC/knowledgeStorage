@@ -1,9 +1,11 @@
 import { Label, Card } from './schema';
+import { HorseCard } from './horseSchema';
 
 const DB_NAME = 'knowledge-storage';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_LABELS = 'labels';
 const STORE_CARDS = 'cards';
+const STORE_HORSE_CARDS = 'horseCards';
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -52,6 +54,11 @@ export const openDatabase = (): Promise<IDBDatabase> => {
       // cardsストアの作成
       if (!db.objectStoreNames.contains(STORE_CARDS)) {
         db.createObjectStore(STORE_CARDS, { keyPath: 'id' });
+      }
+
+      // horseCardsストアの作成
+      if (!db.objectStoreNames.contains(STORE_HORSE_CARDS)) {
+        db.createObjectStore(STORE_HORSE_CARDS, { keyPath: 'id' });
       }
     };
   });
@@ -170,3 +177,61 @@ export const saveCards = async (cards: Card[]): Promise<void> => {
     throw error;
   }
 };
+
+/**
+ * 馬情報カードを読み込む
+ */
+export const loadHorseCards = async (): Promise<HorseCard[]> => {
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_HORSE_CARDS], 'readonly');
+      const store = transaction.objectStore(STORE_HORSE_CARDS);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve(request.result || []);
+      };
+
+      request.onerror = () => {
+        reject(new Error('Failed to load horse cards'));
+      };
+    });
+  } catch (error) {
+    console.error('Error loading horse cards:', error);
+    return [];
+  }
+};
+
+/**
+ * 馬情報カードを保存する
+ */
+export const saveHorseCards = async (horseCards: HorseCard[]): Promise<void> => {
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_HORSE_CARDS], 'readwrite');
+      const store = transaction.objectStore(STORE_HORSE_CARDS);
+
+      // 既存データをクリア
+      store.clear();
+
+      // 新しいデータを追加
+      horseCards.forEach((card) => {
+        store.add(card);
+      });
+
+      transaction.oncomplete = () => {
+        resolve();
+      };
+
+      transaction.onerror = () => {
+        reject(new Error('Failed to save horse cards'));
+      };
+    });
+  } catch (error) {
+    console.error('Error saving horse cards:', error);
+    throw error;
+  }
+};
+
