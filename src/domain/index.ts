@@ -4,6 +4,8 @@ export * from './horseSchema';
 export * from './horseBackupSchema';
 export * from './offspringSchema';
 export * from './pedigreeSchema';
+export * from './diagnosisSchema';
+export * from './diagnosisBackupSchema';
 export * from './indexedDB';
 export * from './id';
 export * from './generateUniqueLabelColor';

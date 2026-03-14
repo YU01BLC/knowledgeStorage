@@ -18,12 +18,25 @@ import { z } from 'zod';
 import { useDomainStore } from '../../stores/useDomainStore';
 import { normalizeKana } from '../../utils/kana';
 import { DiagnosisPayload } from './types';
+import { ConfirmDialog } from '../card/ConfirmDialog';
 
 const TRACK_TYPES = ['芝', 'ダート', '障害'] as const;
 const COURSE_DIRECTIONS = ['右回り', '左回り', '直線'] as const;
 const TRACK_CONFIGS = ['A', 'B', 'C', 'D'] as const;
 const TRACK_CONDITIONS = ['良', '稍重', '重', '不良'] as const;
 const PACE_OPTIONS = ['ハイ', 'ミドル', 'スロー'] as const;
+const RACE_INFO_CLASS_OPTIONS = [
+  '新馬',
+  '未勝利',
+  '1勝',
+  '2勝',
+  '3勝',
+  'OP',
+  'L',
+  'G3',
+  'G2',
+  'G1',
+] as const;
 const RACE_CLASS_OPTIONS = [
   '地方G以下',
   '地方G',
@@ -103,6 +116,16 @@ const createRecentRaces = (): RecentRace[] => [
   },
 ];
 
+const createEmptyRecentRace = (): RecentRace => ({
+  finish: '',
+  cornerPassage: '',
+  pace: '',
+  distance: '',
+  trackType: '',
+  track: '',
+  raceClass: '',
+});
+
 const mergeRecentRaces = (
   races: DiagnosisPayload['entries'][number]['recentRaces']
 ) => {
@@ -117,6 +140,7 @@ const RaceInfoSchema = z.object({
   date: z.string().min(1),
   course: z.string().min(1),
   raceName: z.string().min(1),
+  raceClass: z.enum(RACE_INFO_CLASS_OPTIONS),
   trackType: z.enum(['芝', 'ダート']),
   distance: z.string().min(1),
   courseDirection: z.enum(['右回り', '左回り', '直線']),
@@ -141,10 +165,16 @@ export const AllHorseDiagnosisDialog = ({
   initialData = null,
 }: Props) => {
   const { horseCards } = useDomainStore();
+  const syncHorseRecentRaces = useDomainStore(
+    (state) => state.syncHorseRecentRaces
+  );
 
   const [date, setDate] = useState('');
   const [course, setCourse] = useState('');
   const [raceName, setRaceName] = useState('');
+  const [raceClass, setRaceClass] = useState<
+    (typeof RACE_INFO_CLASS_OPTIONS)[number] | ''
+  >('');
   const [trackType, setTrackType] = useState<'芝' | 'ダート' | '障害' | ''>('');
   const [distance, setDistance] = useState('');
   const [courseDirection, setCourseDirection] = useState<
@@ -168,6 +198,9 @@ export const AllHorseDiagnosisDialog = ({
   const [entryErrors, setEntryErrors] = useState<EntryErrors[]>([]);
   const [entryScoresOpen, setEntryScoresOpen] = useState<boolean[]>([false]);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [addRaceConfirmIndex, setAddRaceConfirmIndex] = useState<number | null>(
+    null
+  );
 
   const STORAGE_KEY = 'all-horse-diagnosis-draft';
 
@@ -176,12 +209,12 @@ export const AllHorseDiagnosisDialog = ({
       date,
       course,
       raceName,
+      raceClass,
       trackType,
       distance,
       courseDirection,
       trackConfig: trackConfig === '' ? null : trackConfig,
       trackCondition,
-      expectedPace: null,
     },
     entries: entries.map((entry) => ({
       frame: entry.frame,
@@ -207,6 +240,7 @@ export const AllHorseDiagnosisDialog = ({
       setDate('');
       setCourse('');
       setRaceName('');
+      setRaceClass('');
       setTrackType('');
       setDistance('');
       setCourseDirection('');
@@ -229,6 +263,11 @@ export const AllHorseDiagnosisDialog = ({
     setDate(initialData.raceInfo.date ?? '');
     setCourse(initialData.raceInfo.course ?? '');
     setRaceName(initialData.raceInfo.raceName ?? '');
+    setRaceClass(
+      (initialData.raceInfo.raceClass as
+        | (typeof RACE_INFO_CLASS_OPTIONS)[number]
+        | '') ?? ''
+    );
     setTrackType(
       (initialData.raceInfo.trackType as '芝' | 'ダート' | '障害' | '') ?? ''
     );
@@ -275,7 +314,13 @@ export const AllHorseDiagnosisDialog = ({
     };
 
   const handleHorseNameChange = (index: number, name: string) => {
-    const matched = horseCards.find((c) => c.name === name);
+    const matched =
+      horseCards.find((c) => c.id === name) ||
+      horseCards.find((c) => c.name === name) ||
+      horseCards.find(
+        (c) => normalizeKana(c.name) === normalizeKana(name)
+      );
+
     setEntries((prev) =>
       prev.map((e, i) =>
         i === index
@@ -283,6 +328,12 @@ export const AllHorseDiagnosisDialog = ({
               ...e,
               horseName: name,
               horseCardId: matched?.id,
+              recentRaces: matched
+                ? createRecentRaces().map((base, idx) => ({
+                    ...base,
+                    ...(matched.recentRaces[idx] ?? {}),
+                  }))
+                : e.recentRaces,
             }
           : e
       )
@@ -303,11 +354,30 @@ export const AllHorseDiagnosisDialog = ({
     setEntryScoresOpen((prev) => [...prev, false]);
   };
 
-  const handleDiagnose = () => {
+  const handleAddRecentRace = () => {
+    if (addRaceConfirmIndex === null) return;
+    setEntries((prev) =>
+      prev.map((entry, idx) =>
+        idx === addRaceConfirmIndex
+          ? {
+              ...entry,
+              recentRaces: [
+                createEmptyRecentRace(),
+                ...entry.recentRaces.slice(0, 2),
+              ],
+            }
+          : entry
+      )
+    );
+    setAddRaceConfirmIndex(null);
+  };
+
+  const handleDiagnose = async () => {
     const input: RaceInfoInput = {
       date,
       course,
       raceName,
+      raceClass: raceClass as RaceInfoInput['raceClass'],
       trackType: trackType as RaceInfoInput['trackType'],
       distance,
       courseDirection: courseDirection as RaceInfoInput['courseDirection'],
@@ -368,12 +438,12 @@ export const AllHorseDiagnosisDialog = ({
       date,
       course,
       raceName,
+      raceClass,
       trackType,
       distance,
       courseDirection,
       trackConfig: trackConfig === '' ? null : trackConfig,
       trackCondition,
-      expectedPace: null,
     };
 
     const entriesPayload: DiagnosisPayload['entries'] = entries.map((entry) => {
@@ -421,6 +491,14 @@ export const AllHorseDiagnosisDialog = ({
       entries: entriesPayload,
     };
 
+    await syncHorseRecentRaces(
+      entries.map((entry) => ({
+        horseCardId: entry.horseCardId ?? null,
+        horseName: entry.horseName,
+        recentRaces: entry.recentRaces,
+      }))
+    );
+
     onSubmitPayload(payload);
     onClose();
   };
@@ -446,6 +524,11 @@ export const AllHorseDiagnosisDialog = ({
       setDate(parsed.raceInfo.date ?? '');
       setCourse(parsed.raceInfo.course ?? '');
       setRaceName(parsed.raceInfo.raceName ?? '');
+      setRaceClass(
+        (parsed.raceInfo.raceClass as
+          | (typeof RACE_INFO_CLASS_OPTIONS)[number]
+          | '') ?? ''
+      );
       setTrackType(
         (parsed.raceInfo.trackType as '芝' | 'ダート' | '障害' | '') ?? ''
       );
@@ -490,30 +573,33 @@ export const AllHorseDiagnosisDialog = ({
     ]);
     setEntryErrors([]);
     setEntryScoresOpen([false]);
+    setRaceClass('');
+    setAddRaceConfirmIndex(null);
     onClose();
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={(_, reason) => {
-        if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
-        handleClose();
-      }}
-      fullWidth
-      maxWidth='xl'
-      PaperProps={{ sx: { maxWidth: 1200 } }}
-    >
-      <DialogTitle>全頭診断</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={4} sx={{ mt: 1 }}>
+    <>
+      <Dialog
+        open={open}
+        onClose={(_, reason) => {
+          if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
+          handleClose();
+        }}
+        fullWidth
+        maxWidth='xl'
+        PaperProps={{ sx: { maxWidth: 1200 } }}
+      >
+        <DialogTitle>全頭診断</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={4} sx={{ mt: 1 }}>
           {/* レース基本情報 */}
           <Stack spacing={2}>
             <Typography variant='subtitle1' sx={{ fontWeight: 600 }}>
               レース情報
             </Typography>
 
-            {/* 1行目: 日付 / 会場 / レース名 / コース種別 */}
+            {/* 1行目: 日付 / 会場 / レース名 / クラス / コース種別 */}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
               <Box sx={{ width: 200 }}>
                 <TextField
@@ -567,6 +653,34 @@ export const AllHorseDiagnosisDialog = ({
                   helperText={raceErrors.raceName}
                   fullWidth
                 />
+              </Box>
+              <Box sx={{ width: 160 }}>
+                <TextField
+                  select
+                  label='クラス'
+                  value={raceClass}
+                  onChange={(e) => {
+                    setRaceClass(
+                      e.target.value as (typeof RACE_INFO_CLASS_OPTIONS)[number]
+                    );
+                    if (raceErrors.raceClass) {
+                      setRaceErrors((prev) => ({
+                        ...prev,
+                        raceClass: undefined,
+                      }));
+                    }
+                  }}
+                  required
+                  error={Boolean(raceErrors.raceClass)}
+                  helperText={raceErrors.raceClass}
+                  fullWidth
+                >
+                  {RACE_INFO_CLASS_OPTIONS.map((value) => (
+                    <MenuItem key={value} value={value}>
+                      {value}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Box>
               <Box sx={{ width: 160 }}>
                 <TextField
@@ -816,6 +930,13 @@ export const AllHorseDiagnosisDialog = ({
                             gap: 2,
                           }}
                         >
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            onClick={() => setAddRaceConfirmIndex(index)}
+                          >
+                            成績を追加
+                          </Button>
                           {entry.recentRaces.map((race, raceIndex) => (
                             <Box
                               key={raceIndex}
@@ -1041,7 +1162,17 @@ export const AllHorseDiagnosisDialog = ({
         <Button variant='contained' onClick={handleDiagnose}>
           診断する
         </Button>
-      </DialogActions>
-    </Dialog>
+        </DialogActions>
+      </Dialog>
+
+      <ConfirmDialog
+        open={addRaceConfirmIndex !== null}
+        title='成績を追加しますか？'
+        message='一番古い成績が削除されます。よろしいですか？'
+        confirmLabel='追加'
+        onConfirm={handleAddRecentRace}
+        onCancel={() => setAddRaceConfirmIndex(null)}
+      />
+    </>
   );
 };

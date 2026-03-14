@@ -3,10 +3,15 @@ import { z } from 'zod';
 import { Card, CardSchema, Label, LabelSchema } from '../domain/schema';
 import { Offspring, OffspringSchema } from '../domain/offspringSchema';
 import { Pedigree, PedigreeSchema } from '../domain/pedigreeSchema';
+import {
+  DiagnosisRecord,
+  DiagnosisRecordSchema,
+} from '../domain/diagnosisSchema';
 import { normalizeKana } from '../utils/kana';
 import {
   HorseCard,
   HorseCardSchema,
+  HorseRecentRace,
   CreateHorseCardInput,
   CreateHorseCardInputSchema,
   UpdateHorseCardInput,
@@ -31,10 +36,13 @@ import {
   saveOffspring,
   loadPedigree,
   savePedigree,
+  loadDiagnosisRecords,
+  saveDiagnosisRecords,
 } from '../domain/indexedDB';
 import { migrateFromLocalStorage } from '../domain/migrateFromLocalStorage';
 import { BackupSchema } from '../domain/backupSchema';
 import { HorseBackupSchema } from '../domain/horseBackupSchema';
+import { DiagnosisBackupSchema } from '../domain/diagnosisBackupSchema';
 
 /**
  * =========================
@@ -63,6 +71,38 @@ const restoreCards = async (): Promise<Card[]> => {
   }
 };
 
+const restoreDiagnosisRecords = async (): Promise<DiagnosisRecord[]> => {
+  try {
+    const raw = await loadDiagnosisRecords();
+    const parsed = z.array(DiagnosisRecordSchema).safeParse(raw);
+    return parsed.success ? parsed.data : [];
+  } catch (error) {
+    console.error('Error restoring diagnosis records:', error);
+    return [];
+  }
+};
+
+const createEmptyRecentRaces = (): HorseRecentRace[] =>
+  Array.from({ length: 3 }, () => ({
+    finish: '',
+    distance: '',
+    trackType: '',
+    track: '',
+    pace: '',
+    cornerPassage: '',
+    raceClass: '',
+  }));
+
+const normalizeRecentRaces = (
+  races?: ReadonlyArray<Partial<HorseRecentRace>>
+): HorseRecentRace[] => {
+  const base = createEmptyRecentRaces();
+  return base.map((item, index) => ({
+    ...item,
+    ...(races?.[index] ?? {}),
+  }));
+};
+
 /**
  * =========================
  * Store State
@@ -74,6 +114,7 @@ type DomainState = {
   horseCards: HorseCard[];
   pedigree: Pedigree[];
   offspring: Offspring[];
+  diagnosisRecords: DiagnosisRecord[];
 
   /**
    * Label Filter (UI State)
@@ -100,6 +141,11 @@ type DomainState = {
   addHorseCard: (input: CreateHorseCardInput) => Promise<void>;
   updateHorseCard: (input: UpdateHorseCardInput) => Promise<void>;
   deleteHorseCard: (cardId: string) => Promise<void>;
+  syncHorseRecentRaces: (entries: ReadonlyArray<{
+    horseCardId?: string | null;
+    horseName: string;
+    recentRaces: ReadonlyArray<Partial<HorseRecentRace>>;
+  }>) => Promise<void>;
 
   /**
    * Offspring CRUD
@@ -128,6 +174,15 @@ type DomainState = {
   importBackup: (data: unknown) => Promise<boolean>;
   exportHorseBackup: () => Promise<void>;
   importHorseBackup: (data: unknown) => Promise<boolean>;
+  exportDiagnosisBackup: () => Promise<void>;
+  importDiagnosisBackup: (
+    data: unknown
+  ) => Promise<{ ok: boolean; message?: string; firstId?: string }>;
+  saveDiagnosisRecord: (input: {
+    id?: string;
+    payload: DiagnosisRecord['payload'];
+    results: DiagnosisRecord['results'];
+  }) => Promise<string>;
 
   /**
    * Initialization
@@ -146,6 +201,7 @@ export const useDomainStore = create<DomainState>((set, get) => ({
   horseCards: [],
   pedigree: [],
   offspring: [],
+  diagnosisRecords: [],
 
   /**
    * -------- Label Filter --------
@@ -240,6 +296,7 @@ export const useDomainStore = create<DomainState>((set, get) => ({
     }
 
     const now = Date.now();
+    const recentRaces = normalizeRecentRaces(parsed.data.recentRaces);
 
     const horseCard: HorseCard = {
       id: generateId(),
@@ -248,6 +305,7 @@ export const useDomainStore = create<DomainState>((set, get) => ({
       dam: parsed.data.dam,
       damSire: parsed.data.damSire,
       offspringNames: parsed.data.offspringNames,
+      recentRaces,
       createdAt: now,
       updatedAt: now,
     };
@@ -259,7 +317,13 @@ export const useDomainStore = create<DomainState>((set, get) => ({
     }
 
     set((state) => {
-      const next = [...state.horseCards, validated.data];
+      const next = [
+        ...state.horseCards,
+        {
+          ...validated.data,
+          recentRaces: normalizeRecentRaces(validated.data.recentRaces),
+        },
+      ];
       saveHorseCards(next).catch((error) => {
         console.error('Error saving horse cards:', error);
       });
@@ -280,6 +344,9 @@ export const useDomainStore = create<DomainState>((set, get) => ({
           ? {
               ...card,
               ...parsed.data,
+              recentRaces: parsed.data.recentRaces
+                ? normalizeRecentRaces(parsed.data.recentRaces)
+                : card.recentRaces,
               updatedAt: Date.now(),
             }
           : card
@@ -298,6 +365,51 @@ export const useDomainStore = create<DomainState>((set, get) => ({
         console.error('Error saving horse cards:', error);
       });
       return { horseCards: next };
+    });
+  },
+
+  syncHorseRecentRaces: async (entries) => {
+    if (entries.length === 0) return;
+
+    const entryById = new Map<string, (typeof entries)[number]>();
+    const entryByExactName = new Map<string, (typeof entries)[number]>();
+    const entryByNormalizedName = new Map<string, (typeof entries)[number]>();
+
+    entries.forEach((entry) => {
+      if (entry.horseCardId) {
+        entryById.set(entry.horseCardId, entry);
+      }
+      if (entry.horseName) {
+        entryByExactName.set(entry.horseName, entry);
+        entryByNormalizedName.set(normalizeKana(entry.horseName), entry);
+      }
+    });
+
+    set((state) => {
+      let updated = false;
+      const next = state.horseCards.map((card) => {
+        const matched =
+          entryById.get(card.id) ??
+          entryByExactName.get(card.name) ??
+          entryByNormalizedName.get(normalizeKana(card.name));
+        if (!matched) return card;
+
+        updated = true;
+        return {
+          ...card,
+          recentRaces: normalizeRecentRaces(matched.recentRaces),
+          updatedAt: Date.now(),
+        };
+      });
+
+      if (updated) {
+        saveHorseCards(next).catch((error) => {
+          console.error('Error saving horse cards:', error);
+        });
+        return { horseCards: next };
+      }
+
+      return state;
     });
   },
 
@@ -718,14 +830,18 @@ export const useDomainStore = create<DomainState>((set, get) => ({
     }
 
     const { horseCards, pedigree, offspring } = parsed.data;
+    const normalizedHorseCards = horseCards.map((card) => ({
+      ...card,
+      recentRaces: normalizeRecentRaces(card.recentRaces),
+    }));
 
     try {
-      await saveHorseCards(horseCards);
+      await saveHorseCards(normalizedHorseCards);
       await savePedigree(pedigree ?? []);
       await saveOffspring(offspring ?? []);
 
       set({
-        horseCards,
+        horseCards: normalizedHorseCards,
         pedigree: pedigree ?? [],
         offspring: offspring ?? [],
       });
@@ -735,6 +851,105 @@ export const useDomainStore = create<DomainState>((set, get) => ({
       console.error('Error importing horse backup:', error);
       return false;
     }
+  },
+
+  exportDiagnosisBackup: async () => {
+    const { diagnosisRecords } = get();
+    const payload = { diagnosisRecords };
+
+    const validated = DiagnosisBackupSchema.safeParse(payload);
+    if (!validated.success) {
+      console.error(validated.error);
+      return;
+    }
+
+    const blob = new Blob([JSON.stringify(validated.data, null, 2)], {
+      type: 'application/json',
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `diagnosis-backup-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  importDiagnosisBackup: async (data) => {
+    const parsed = DiagnosisBackupSchema.safeParse(data);
+
+    if (!parsed.success) {
+      const issueMessages = parsed.error.issues.map((issue) => {
+        if (issue.path[0] === 'diagnosisRecords' && issue.code === 'invalid_type') {
+          return 'diagnosisRecords がありません。';
+        }
+        if (issue.path[0] === 'diagnosisRecords' && issue.path[2] === 'id') {
+          return 'id がUUID形式ではありません。';
+        }
+        return 'バックアップの形式が正しくありません。';
+      });
+      return {
+        ok: false,
+        message: issueMessages[0] ?? 'バックアップの形式が正しくありません。',
+      };
+    }
+
+    const { diagnosisRecords } = parsed.data;
+
+    try {
+      await saveDiagnosisRecords(diagnosisRecords);
+      set({ diagnosisRecords });
+      const firstId = diagnosisRecords[0]?.id;
+      return { ok: true, firstId };
+    } catch (error) {
+      console.error('Error importing diagnosis backup:', error);
+      return { ok: false, message: 'バックアップの保存に失敗しました。' };
+    }
+  },
+
+  saveDiagnosisRecord: async ({ id, payload, results }) => {
+    const now = Date.now();
+    const raceInfo = {
+      date: payload.raceInfo.date,
+      course: payload.raceInfo.course,
+      raceName: payload.raceInfo.raceName,
+    };
+
+    const recordId = id ?? generateId();
+
+    set((state) => {
+      const existing = state.diagnosisRecords.find(
+        (item) => item.id === recordId
+      );
+      const nextRecord: DiagnosisRecord = {
+        id: recordId,
+        raceInfo,
+        payload,
+        results,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      const validated = DiagnosisRecordSchema.safeParse(nextRecord);
+      if (!validated.success) {
+        console.error(validated.error);
+        return state;
+      }
+
+      const nextRecords = existing
+        ? state.diagnosisRecords.map((item) =>
+            item.id === recordId ? validated.data : item
+          )
+        : [validated.data, ...state.diagnosisRecords];
+
+      saveDiagnosisRecords(nextRecords).catch((error) => {
+        console.error('Error saving diagnosis records:', error);
+      });
+
+      return { diagnosisRecords: nextRecords };
+    });
+
+    return recordId;
   },
 
   /**
@@ -748,9 +963,13 @@ export const useDomainStore = create<DomainState>((set, get) => ({
       // データを読み込む
       const labels = await restoreLabels();
       const cards = await restoreCards();
-      const horseCards = await loadHorseCards();
+      const horseCards = (await loadHorseCards()).map((card) => ({
+        ...card,
+        recentRaces: normalizeRecentRaces(card.recentRaces),
+      }));
       const storedOffspring = await loadOffspring();
       const storedPedigree = await loadPedigree();
+      const diagnosisRecords = await restoreDiagnosisRecords();
 
       const pedigreeFromCards = Array.from(
         new Set(
@@ -795,6 +1014,7 @@ export const useDomainStore = create<DomainState>((set, get) => ({
         horseCards,
         pedigree: mergedPedigree,
         offspring: mergedOffspring,
+        diagnosisRecords,
       });
 
       if (mergedPedigree.length !== storedPedigree.length) {

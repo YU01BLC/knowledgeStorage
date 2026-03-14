@@ -10,12 +10,12 @@ export type DiagnosisPayload = {
     date: string;
     course: string;
     raceName: string;
+    raceClass?: string;
     trackType: string;
     distance: string;
     courseDirection: string;
     trackConfig: string | null;
     trackCondition: string;
-    expectedPace: string | null;
   };
   entries: Array<{
     frame: number | '';
@@ -31,6 +31,7 @@ export type DiagnosisPayload = {
     recentRaces: Array<{
       finish: string;
       distance: string;
+      trackType: string;
       track: string;
       pace: string;
       cornerPassage: string;

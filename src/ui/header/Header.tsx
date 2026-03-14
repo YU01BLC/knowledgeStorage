@@ -7,6 +7,8 @@ import {
   Menu,
   MenuItem,
   ListSubheader,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
@@ -34,6 +36,9 @@ export const Header = () => {
   const [manageAnchorEl, setManageAnchorEl] = useState<null | HTMLElement>(
     null
   );
+  const [backupErrorMessage, setBackupErrorMessage] = useState<string | null>(
+    null
+  );
   const {
     labels,
     selectedLabelIds,
@@ -44,6 +49,8 @@ export const Header = () => {
     importBackup,
     exportHorseBackup,
     importHorseBackup,
+    exportDiagnosisBackup,
+    importDiagnosisBackup,
     searchText,
     setSearchText,
   } = useDomainStore();
@@ -53,6 +60,7 @@ export const Header = () => {
     setViewMode,
     setCurrentPage,
     setDiagnosisModalOpen,
+    setActiveDiagnosisId,
   } = useUIStore();
 
   const isFilterActive =
@@ -93,8 +101,9 @@ export const Header = () => {
       <Button
         variant='outlined'
         onClick={() => {
-          setCurrentPage('diagnosis');
-          setDiagnosisModalOpen(true);
+          setCurrentPage('diagnosis-list');
+          setActiveDiagnosisId(null);
+          setDiagnosisModalOpen(false);
         }}
       >
         全頭診断
@@ -186,6 +195,14 @@ export const Header = () => {
         >
           馬情報
         </MenuItem>
+        <MenuItem
+          onClick={async () => {
+            await exportDiagnosisBackup();
+            setManageAnchorEl(null);
+          }}
+        >
+          全頭診断
+        </MenuItem>
         <ListSubheader>復元</ListSubheader>
         <MenuItem component='label'>
           通常カード
@@ -243,6 +260,40 @@ export const Header = () => {
             }}
           />
         </MenuItem>
+        <MenuItem component='label'>
+          全頭診断
+          <input
+            type='file'
+            hidden
+            accept='application/json'
+            onChange={async (e) => {
+              const input = e.currentTarget;
+              const file = input.files?.[0];
+              if (!file) return;
+
+              try {
+                const text = await file.text();
+                const json = JSON.parse(text);
+
+                const result = await importDiagnosisBackup(json);
+                if (!result.ok) {
+                  setBackupErrorMessage(
+                    result.message ?? '不正なバックアップファイルです'
+                  );
+                } else if (result.firstId) {
+                  setActiveDiagnosisId(result.firstId);
+                  setCurrentPage('diagnosis-result');
+                  setDiagnosisModalOpen(false);
+                }
+              } catch {
+                setBackupErrorMessage('バックアップの読み込みに失敗しました');
+              } finally {
+                input.value = '';
+                setManageAnchorEl(null);
+              }
+            }}
+          />
+        </MenuItem>
       </Menu>
 
       {/* Dialogs */}
@@ -266,6 +317,19 @@ export const Header = () => {
           await addLabel(label);
         }}
       />
+
+      <Snackbar
+        open={Boolean(backupErrorMessage)}
+        autoHideDuration={4000}
+        onClose={() => setBackupErrorMessage(null)}
+      >
+        <Alert
+          severity='error'
+          onClose={() => setBackupErrorMessage(null)}
+        >
+          {backupErrorMessage}
+        </Alert>
+      </Snackbar>
 
     </Box>
   );

@@ -7,6 +7,7 @@ import {
   useTheme,
   alpha,
   Button,
+  Collapse,
 } from '@mui/material';
 import { useState } from 'react';
 import { HorseCard } from '../../domain/horseSchema';
@@ -19,6 +20,11 @@ type Props = {
 export const HorseCardItem = ({ card }: Props) => {
   const theme = useTheme();
   const [editOpen, setEditOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
+
+  const hasRecentRaces = card.recentRaces.some((race) =>
+    Object.values(race).some((value) => value.trim() !== '')
+  );
 
   return (
     <>
@@ -111,6 +117,52 @@ export const HorseCardItem = ({ card }: Props) => {
                   未入力
                 </Typography>
               )}
+            </Box>
+
+            <Box>
+              <Typography variant='caption' color='text.secondary'>
+                成績
+              </Typography>
+              <Box sx={{ mt: 0.5 }}>
+                <Button
+                  size='small'
+                  variant='outlined'
+                  onClick={() => setResultsOpen((prev) => !prev)}
+                >
+                  {resultsOpen ? '成績を隠す' : '成績を表示'}
+                </Button>
+              </Box>
+              <Collapse in={resultsOpen}>
+                <Stack spacing={0.5} sx={{ mt: 1 }}>
+                  {hasRecentRaces ? (
+                    card.recentRaces.map((race, index) => (
+                      <Typography
+                        key={index}
+                        variant='body2'
+                        color='text.secondary'
+                      >
+                        {`${index + 1}走前: ${
+                          [
+                            race.finish && `着順${race.finish}`,
+                            race.distance && `${race.distance}m`,
+                            race.trackType,
+                            race.track && `馬場${race.track}`,
+                            race.pace && `ペース${race.pace}`,
+                            race.cornerPassage && `通過${race.cornerPassage}`,
+                            race.raceClass && `クラス${race.raceClass}`,
+                          ]
+                            .filter(Boolean)
+                            .join(' / ') || '未入力'
+                        }`}
+                      </Typography>
+                    ))
+                  ) : (
+                    <Typography variant='body2' color='text.secondary'>
+                      未入力
+                    </Typography>
+                  )}
+                </Stack>
+              </Collapse>
             </Box>
           </Stack>
         </CardContent>
