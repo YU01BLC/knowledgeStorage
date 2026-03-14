@@ -467,10 +467,17 @@ export const AllHorseDiagnosisPage = () => {
             <Typography variant='subtitle1' sx={{ fontWeight: 600 }}>
               診断結果
             </Typography>
-            <Table size='small'>
+            <Table size='small' sx={{ tableLayout: 'fixed', width: '100%' }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                  <TableCell
+                    sx={{
+                      whiteSpace: 'nowrap',
+                      width: { xs: 40, sm: 64 },
+                      minWidth: { xs: 40, sm: 64 },
+                      px: { xs: 1, sm: 2 },
+                    }}
+                  >
                     <TableSortLabel
                       active={sortKey === 'rating'}
                       direction='asc'
@@ -479,7 +486,14 @@ export const AllHorseDiagnosisPage = () => {
                       評価
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap', width: 80 }}>
+                  <TableCell
+                    sx={{
+                      whiteSpace: 'nowrap',
+                      width: { xs: 40, sm: 72 },
+                      minWidth: { xs: 40, sm: 72 },
+                      px: { xs: 1, sm: 2 },
+                    }}
+                  >
                     <TableSortLabel
                       active={sortKey === 'number'}
                       direction='asc'
@@ -488,20 +502,49 @@ export const AllHorseDiagnosisPage = () => {
                       番号
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap', width: 180 }}>
+                  <TableCell
+                    sx={{
+                      whiteSpace: 'nowrap',
+                      width: 180,
+                      display: { xs: 'none', sm: 'table-cell' },
+                    }}
+                  >
                     馬名
                   </TableCell>
-                  <TableCell>根拠</TableCell>
+                  <TableCell sx={{ width: { xs: 'auto', sm: 'auto' } }}>
+                    根拠
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {sortedResults.map((row, idx) => (
                   <TableRow key={idx}>
-                    <TableCell>{row.rating}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                    <TableCell
+                      sx={{
+                        whiteSpace: 'nowrap',
+                        width: { xs: 40, sm: 64 },
+                        minWidth: { xs: 40, sm: 64 },
+                        px: { xs: 1, sm: 2 },
+                      }}
+                    >
+                      {row.rating}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        whiteSpace: 'nowrap',
+                        width: { xs: 40, sm: 72 },
+                        minWidth: { xs: 40, sm: 72 },
+                        px: { xs: 1, sm: 2 },
+                      }}
+                    >
                       {row.number}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                    <TableCell
+                      sx={{
+                        whiteSpace: 'nowrap',
+                        display: { xs: 'none', sm: 'table-cell' },
+                      }}
+                    >
                       {row.horseName}
                     </TableCell>
                     <TableCell sx={{ whiteSpace: 'pre-line' }}>
