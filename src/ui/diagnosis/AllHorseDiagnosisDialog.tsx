@@ -908,19 +908,30 @@ export const AllHorseDiagnosisDialog = ({
                       />
                     </Box>
                     <Box sx={{ width: '100%' }}>
-                      <Button
-                        size='small'
-                        variant='outlined'
-                        onClick={() =>
-                          setEntryScoresOpen((prev) =>
-                            prev.map((open, i) =>
-                              i === index ? !open : open
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          size='small'
+                          variant='outlined'
+                          onClick={() =>
+                            setEntryScoresOpen((prev) =>
+                              prev.map((open, i) =>
+                                i === index ? !open : open
+                              )
                             )
-                          )
-                        }
-                      >
-                        成績を入力
-                      </Button>
+                          }
+                        >
+                          成績を入力
+                        </Button>
+                        {entryScoresOpen[index] ? (
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            onClick={() => setAddRaceConfirmIndex(index)}
+                          >
+                            成績を追加
+                          </Button>
+                        ) : null}
+                      </Box>
                       <Collapse in={entryScoresOpen[index] ?? false}>
                         <Box
                           sx={{
@@ -930,13 +941,6 @@ export const AllHorseDiagnosisDialog = ({
                             gap: 2,
                           }}
                         >
-                          <Button
-                            size='small'
-                            variant='outlined'
-                            onClick={() => setAddRaceConfirmIndex(index)}
-                          >
-                            成績を追加
-                          </Button>
                           {entry.recentRaces.map((race, raceIndex) => (
                             <Box
                               key={raceIndex}
