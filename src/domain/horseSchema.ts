@@ -7,6 +7,18 @@ import { IdSchema } from './schema';
  * =========================
  */
 
+export const HorseRecentRaceSchema = z.object({
+  finish: z.string(),
+  distance: z.string(),
+  trackType: z.string(),
+  track: z.string(),
+  pace: z.string(),
+  cornerPassage: z.string(),
+  raceClass: z.string(),
+});
+
+export type HorseRecentRace = z.infer<typeof HorseRecentRaceSchema>;
+
 export const HorseCardSchema = z.object({
   id: IdSchema,
   /** 馬名 */
@@ -19,6 +31,8 @@ export const HorseCardSchema = z.object({
   damSire: z.string().optional(),
   /** 産駒名の一覧 */
   offspringNames: z.array(z.string().min(1)),
+  /** 直近3走 */
+  recentRaces: z.array(HorseRecentRaceSchema),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -37,6 +51,7 @@ export const CreateHorseCardInputSchema = z.object({
   dam: z.string().optional(),
   damSire: z.string().optional(),
   offspringNames: z.array(z.string().min(1)),
+  recentRaces: z.array(HorseRecentRaceSchema).optional(),
 });
 
 export type CreateHorseCardInput = z.infer<typeof CreateHorseCardInputSchema>;
@@ -46,4 +61,3 @@ export const UpdateHorseCardInputSchema = CreateHorseCardInputSchema.extend({
 });
 
 export type UpdateHorseCardInput = z.infer<typeof UpdateHorseCardInputSchema>;
-

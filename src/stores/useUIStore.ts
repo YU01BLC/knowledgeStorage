@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 type ViewMode = 'card' | 'horse';
-type PageMode = 'home' | 'diagnosis';
+type PageMode = 'home' | 'diagnosis-list' | 'diagnosis-result';
 
 type UIState = {
   viewMode: ViewMode;
@@ -10,6 +10,8 @@ type UIState = {
   setCurrentPage: (page: PageMode) => void;
   diagnosisModalOpen: boolean;
   setDiagnosisModalOpen: (open: boolean) => void;
+  activeDiagnosisId: string | null;
+  setActiveDiagnosisId: (id: string | null) => void;
 };
 
 export const useUIStore = create<UIState>((set) => ({
@@ -19,4 +21,6 @@ export const useUIStore = create<UIState>((set) => ({
   setCurrentPage: (page) => set({ currentPage: page }),
   diagnosisModalOpen: false,
   setDiagnosisModalOpen: (open) => set({ diagnosisModalOpen: open }),
+  activeDiagnosisId: null,
+  setActiveDiagnosisId: (id) => set({ activeDiagnosisId: id }),
 }));

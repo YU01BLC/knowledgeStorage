@@ -1,15 +1,16 @@
 import { Grid, Stack } from '@mui/material';
 import { useDomainStore } from '../../stores/useDomainStore';
 import { HorseCardItem } from './HorseCardItem';
+import { normalizeKana } from '../../utils/kana';
 
 export const HorseCardList = () => {
   const { horseCards, searchText } = useDomainStore();
 
-  const normalizedSearch = searchText.trim();
+  const normalizedSearch = normalizeKana(searchText);
 
   const filteredCards = horseCards.filter((card) => {
     if (!normalizedSearch) return true;
-    return card.name.includes(normalizedSearch);
+    return normalizeKana(card.name).includes(normalizedSearch);
   });
 
   return (
@@ -30,4 +31,3 @@ export const HorseCardList = () => {
     </Stack>
   );
 };
-

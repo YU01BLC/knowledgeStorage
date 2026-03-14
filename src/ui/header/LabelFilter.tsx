@@ -10,6 +10,7 @@ import {
   TextField,
 } from '@mui/material';
 import { Label } from '../../domain/schema';
+import { normalizeKana } from '../../utils/kana';
 
 type Props = {
   labels: Label[];
@@ -22,11 +23,11 @@ export const LabelFilter = ({ labels, selectedLabelIds, onChange }: Props) => {
   const [labelSearch, setLabelSearch] = useState('');
 
   const open = Boolean(anchorEl);
-  const normalizedSearch = labelSearch.trim().toLowerCase();
+  const normalizedSearch = normalizeKana(labelSearch);
   const filteredLabels = labels.filter((label) =>
     normalizedSearch === ''
       ? true
-      : label.name.toLowerCase().includes(normalizedSearch)
+      : normalizeKana(label.name).includes(normalizedSearch)
   );
 
   const toggleLabel = (id: string) => {

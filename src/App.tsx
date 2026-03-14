@@ -7,6 +7,7 @@ import { Header } from './ui/header/Header';
 import { KnowledgeCardList } from './ui/card/cardList';
 import { HorseCardList } from './ui/horse/HorseCardList';
 import { AllHorseDiagnosisPage } from './ui/diagnosis/AllHorseDiagnosisPage';
+import { AllHorseDiagnosisListPage } from './ui/diagnosis/AllHorseDiagnosisListPage';
 import { useDomainStore } from './stores/useDomainStore';
 import { useUIStore } from './stores/useUIStore';
 
@@ -17,9 +18,15 @@ export default function App() {
   const currentPage = useUIStore((state) => state.currentPage);
 
   useEffect(() => {
-    initialize().catch((error) => {
-      console.error('Failed to initialize store:', error);
-    });
+    const run = async () => {
+      try {
+        await initialize();
+      } catch (error) {
+        console.error('Failed to initialize store:', error);
+      }
+    };
+
+    run();
   }, [initialize]);
 
   const colorMode = useMemo(
@@ -38,7 +45,9 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AppLayout header={<Header />}>
-          {currentPage === 'diagnosis' ? (
+          {currentPage === 'diagnosis-list' ? (
+            <AllHorseDiagnosisListPage />
+          ) : currentPage === 'diagnosis-result' ? (
             <AllHorseDiagnosisPage />
           ) : viewMode === 'card' ? (
             <KnowledgeCardList />

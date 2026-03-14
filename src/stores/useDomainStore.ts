@@ -1,9 +1,17 @@
 import { create } from 'zustand';
 import { z } from 'zod';
 import { Card, CardSchema, Label, LabelSchema } from '../domain/schema';
+import { Offspring, OffspringSchema } from '../domain/offspringSchema';
+import { Pedigree, PedigreeSchema } from '../domain/pedigreeSchema';
+import {
+  DiagnosisRecord,
+  DiagnosisRecordSchema,
+} from '../domain/diagnosisSchema';
+import { normalizeKana } from '../utils/kana';
 import {
   HorseCard,
   HorseCardSchema,
+  HorseRecentRace,
   CreateHorseCardInput,
   CreateHorseCardInputSchema,
   UpdateHorseCardInput,
@@ -24,9 +32,17 @@ import {
   saveCards,
   loadHorseCards,
   saveHorseCards,
+  loadOffspring,
+  saveOffspring,
+  loadPedigree,
+  savePedigree,
+  loadDiagnosisRecords,
+  saveDiagnosisRecords,
 } from '../domain/indexedDB';
 import { migrateFromLocalStorage } from '../domain/migrateFromLocalStorage';
 import { BackupSchema } from '../domain/backupSchema';
+import { HorseBackupSchema } from '../domain/horseBackupSchema';
+import { DiagnosisBackupSchema } from '../domain/diagnosisBackupSchema';
 
 /**
  * =========================
@@ -55,6 +71,38 @@ const restoreCards = async (): Promise<Card[]> => {
   }
 };
 
+const restoreDiagnosisRecords = async (): Promise<DiagnosisRecord[]> => {
+  try {
+    const raw = await loadDiagnosisRecords();
+    const parsed = z.array(DiagnosisRecordSchema).safeParse(raw);
+    return parsed.success ? parsed.data : [];
+  } catch (error) {
+    console.error('Error restoring diagnosis records:', error);
+    return [];
+  }
+};
+
+const createEmptyRecentRaces = (): HorseRecentRace[] =>
+  Array.from({ length: 3 }, () => ({
+    finish: '',
+    distance: '',
+    trackType: '',
+    track: '',
+    pace: '',
+    cornerPassage: '',
+    raceClass: '',
+  }));
+
+const normalizeRecentRaces = (
+  races?: ReadonlyArray<Partial<HorseRecentRace>>
+): HorseRecentRace[] => {
+  const base = createEmptyRecentRaces();
+  return base.map((item, index) => ({
+    ...item,
+    ...(races?.[index] ?? {}),
+  }));
+};
+
 /**
  * =========================
  * Store State
@@ -64,6 +112,9 @@ type DomainState = {
   cards: Card[];
   labels: Label[];
   horseCards: HorseCard[];
+  pedigree: Pedigree[];
+  offspring: Offspring[];
+  diagnosisRecords: DiagnosisRecord[];
 
   /**
    * Label Filter (UI State)
@@ -90,6 +141,23 @@ type DomainState = {
   addHorseCard: (input: CreateHorseCardInput) => Promise<void>;
   updateHorseCard: (input: UpdateHorseCardInput) => Promise<void>;
   deleteHorseCard: (cardId: string) => Promise<void>;
+  syncHorseRecentRaces: (entries: ReadonlyArray<{
+    horseCardId?: string | null;
+    horseName: string;
+    recentRaces: ReadonlyArray<Partial<HorseRecentRace>>;
+  }>) => Promise<void>;
+
+  /**
+   * Offspring CRUD
+   */
+  addPedigree: (input: { id: string; name: string }) => Promise<void>;
+  updatePedigree: (input: Pedigree) => Promise<void>;
+  deletePedigree: (pedigreeId: string) => Promise<void>;
+  addOffspring: (input: { id: string; name: string }) => Promise<void>;
+  updateOffspring: (input: Offspring) => Promise<void>;
+  deleteOffspring: (offspringId: string) => Promise<void>;
+  ensurePedigreeNames: (names: string[]) => Promise<void>;
+  ensureOffspringNames: (names: string[]) => Promise<void>;
 
   /**
    * Label CRUD
@@ -104,6 +172,17 @@ type DomainState = {
   exportBackup: () => Promise<void>;
   exportFilteredBackup: () => Promise<void>;
   importBackup: (data: unknown) => Promise<boolean>;
+  exportHorseBackup: () => Promise<void>;
+  importHorseBackup: (data: unknown) => Promise<boolean>;
+  exportDiagnosisBackup: () => Promise<void>;
+  importDiagnosisBackup: (
+    data: unknown
+  ) => Promise<{ ok: boolean; message?: string; firstId?: string }>;
+  saveDiagnosisRecord: (input: {
+    id?: string;
+    payload: DiagnosisRecord['payload'];
+    results: DiagnosisRecord['results'];
+  }) => Promise<string>;
 
   /**
    * Initialization
@@ -120,6 +199,9 @@ export const useDomainStore = create<DomainState>((set, get) => ({
   cards: [],
   labels: [],
   horseCards: [],
+  pedigree: [],
+  offspring: [],
+  diagnosisRecords: [],
 
   /**
    * -------- Label Filter --------
@@ -214,6 +296,7 @@ export const useDomainStore = create<DomainState>((set, get) => ({
     }
 
     const now = Date.now();
+    const recentRaces = normalizeRecentRaces(parsed.data.recentRaces);
 
     const horseCard: HorseCard = {
       id: generateId(),
@@ -222,6 +305,7 @@ export const useDomainStore = create<DomainState>((set, get) => ({
       dam: parsed.data.dam,
       damSire: parsed.data.damSire,
       offspringNames: parsed.data.offspringNames,
+      recentRaces,
       createdAt: now,
       updatedAt: now,
     };
@@ -233,7 +317,13 @@ export const useDomainStore = create<DomainState>((set, get) => ({
     }
 
     set((state) => {
-      const next = [...state.horseCards, validated.data];
+      const next = [
+        ...state.horseCards,
+        {
+          ...validated.data,
+          recentRaces: normalizeRecentRaces(validated.data.recentRaces),
+        },
+      ];
       saveHorseCards(next).catch((error) => {
         console.error('Error saving horse cards:', error);
       });
@@ -254,6 +344,9 @@ export const useDomainStore = create<DomainState>((set, get) => ({
           ? {
               ...card,
               ...parsed.data,
+              recentRaces: parsed.data.recentRaces
+                ? normalizeRecentRaces(parsed.data.recentRaces)
+                : card.recentRaces,
               updatedAt: Date.now(),
             }
           : card
@@ -272,6 +365,275 @@ export const useDomainStore = create<DomainState>((set, get) => ({
         console.error('Error saving horse cards:', error);
       });
       return { horseCards: next };
+    });
+  },
+
+  syncHorseRecentRaces: async (entries) => {
+    if (entries.length === 0) return;
+
+    const entryById = new Map<string, (typeof entries)[number]>();
+    const entryByExactName = new Map<string, (typeof entries)[number]>();
+    const entryByNormalizedName = new Map<string, (typeof entries)[number]>();
+
+    entries.forEach((entry) => {
+      if (entry.horseCardId) {
+        entryById.set(entry.horseCardId, entry);
+      }
+      if (entry.horseName) {
+        entryByExactName.set(entry.horseName, entry);
+        entryByNormalizedName.set(normalizeKana(entry.horseName), entry);
+      }
+    });
+
+    set((state) => {
+      let updated = false;
+      const next = state.horseCards.map((card) => {
+        const matched =
+          entryById.get(card.id) ??
+          entryByExactName.get(card.name) ??
+          entryByNormalizedName.get(normalizeKana(card.name));
+        if (!matched) return card;
+
+        updated = true;
+        return {
+          ...card,
+          recentRaces: normalizeRecentRaces(matched.recentRaces),
+          updatedAt: Date.now(),
+        };
+      });
+
+      if (updated) {
+        saveHorseCards(next).catch((error) => {
+          console.error('Error saving horse cards:', error);
+        });
+        return { horseCards: next };
+      }
+
+      return state;
+    });
+  },
+
+  /**
+   * -------- Pedigree --------
+   */
+  addPedigree: async (input) => {
+    const parsed = PedigreeSchema.safeParse(input);
+    if (!parsed.success) {
+      console.error(parsed.error);
+      return;
+    }
+
+    const exists = get().pedigree.some(
+      (o) => normalizeKana(o.name) === normalizeKana(parsed.data.name)
+    );
+    if (exists) return;
+
+    set((state) => {
+      const next = [...state.pedigree, parsed.data];
+      savePedigree(next).catch((error) => {
+        console.error('Error saving pedigree:', error);
+      });
+      return { pedigree: next };
+    });
+  },
+
+  updatePedigree: async (input) => {
+    const parsed = PedigreeSchema.safeParse(input);
+    if (!parsed.success) {
+      console.error(parsed.error);
+      return;
+    }
+
+    set((state) => {
+      const prev = state.pedigree.find((o) => o.id === parsed.data.id);
+      const nextPedigree = state.pedigree.map((o) =>
+        o.id === parsed.data.id ? parsed.data : o
+      );
+
+      const nextHorseCards =
+        prev && prev.name !== parsed.data.name
+          ? state.horseCards.map((card) => ({
+              ...card,
+              sire: card.sire === prev.name ? parsed.data.name : card.sire,
+              dam: card.dam === prev.name ? parsed.data.name : card.dam,
+              damSire:
+                card.damSire === prev.name ? parsed.data.name : card.damSire,
+              offspringNames: card.offspringNames.map((name) =>
+                name === prev.name ? parsed.data.name : name
+              ),
+            }))
+          : state.horseCards;
+
+      savePedigree(nextPedigree).catch((error) => {
+        console.error('Error saving pedigree:', error);
+      });
+      if (nextHorseCards !== state.horseCards) {
+        saveHorseCards(nextHorseCards).catch((error) => {
+          console.error('Error saving horse cards:', error);
+        });
+      }
+
+      return { pedigree: nextPedigree, horseCards: nextHorseCards };
+    });
+  },
+
+  deletePedigree: async (pedigreeId) => {
+    set((state) => {
+      const target = state.pedigree.find((o) => o.id === pedigreeId);
+      const nextPedigree = state.pedigree.filter((o) => o.id !== pedigreeId);
+      const nextHorseCards = target
+        ? state.horseCards.map((card) => ({
+            ...card,
+            sire: card.sire === target.name ? undefined : card.sire,
+            dam: card.dam === target.name ? undefined : card.dam,
+            damSire: card.damSire === target.name ? undefined : card.damSire,
+            offspringNames: card.offspringNames.filter(
+              (name) => name !== target.name
+            ),
+          }))
+        : state.horseCards;
+
+      savePedigree(nextPedigree).catch((error) => {
+        console.error('Error saving pedigree:', error);
+      });
+      if (nextHorseCards !== state.horseCards) {
+        saveHorseCards(nextHorseCards).catch((error) => {
+          console.error('Error saving horse cards:', error);
+        });
+      }
+
+      return { pedigree: nextPedigree, horseCards: nextHorseCards };
+    });
+  },
+
+  /**
+   * -------- Offspring --------
+   */
+  addOffspring: async (input) => {
+    const parsed = OffspringSchema.safeParse(input);
+    if (!parsed.success) {
+      console.error(parsed.error);
+      return;
+    }
+
+    const exists = get().offspring.some(
+      (o) => normalizeKana(o.name) === normalizeKana(parsed.data.name)
+    );
+    if (exists) return;
+
+    set((state) => {
+      const next = [...state.offspring, parsed.data];
+      saveOffspring(next).catch((error) => {
+        console.error('Error saving offspring:', error);
+      });
+      return { offspring: next };
+    });
+  },
+
+  updateOffspring: async (input) => {
+    const parsed = OffspringSchema.safeParse(input);
+    if (!parsed.success) {
+      console.error(parsed.error);
+      return;
+    }
+
+    set((state) => {
+      const prev = state.offspring.find((o) => o.id === parsed.data.id);
+      const nextOffspring = state.offspring.map((o) =>
+        o.id === parsed.data.id ? parsed.data : o
+      );
+
+      const nextHorseCards =
+        prev && prev.name !== parsed.data.name
+          ? state.horseCards.map((card) => ({
+              ...card,
+              offspringNames: card.offspringNames.map((name) =>
+                name === prev.name ? parsed.data.name : name
+              ),
+            }))
+          : state.horseCards;
+
+      saveOffspring(nextOffspring).catch((error) => {
+        console.error('Error saving offspring:', error);
+      });
+      if (nextHorseCards !== state.horseCards) {
+        saveHorseCards(nextHorseCards).catch((error) => {
+          console.error('Error saving horse cards:', error);
+        });
+      }
+
+      return { offspring: nextOffspring, horseCards: nextHorseCards };
+    });
+  },
+
+  deleteOffspring: async (offspringId) => {
+    set((state) => {
+      const target = state.offspring.find((o) => o.id === offspringId);
+      const nextOffspring = state.offspring.filter((o) => o.id !== offspringId);
+      const nextHorseCards = target
+        ? state.horseCards.map((card) => ({
+            ...card,
+            offspringNames: card.offspringNames.filter(
+              (name) => name !== target.name
+            ),
+          }))
+        : state.horseCards;
+
+      saveOffspring(nextOffspring).catch((error) => {
+        console.error('Error saving offspring:', error);
+      });
+      if (nextHorseCards !== state.horseCards) {
+        saveHorseCards(nextHorseCards).catch((error) => {
+          console.error('Error saving horse cards:', error);
+        });
+      }
+
+      return { offspring: nextOffspring, horseCards: nextHorseCards };
+    });
+  },
+
+  ensurePedigreeNames: async (names) => {
+    const normalized = Array.from(
+      new Set(names.map((n) => n.trim()).filter(Boolean))
+    );
+    if (normalized.length === 0) return;
+
+    const existing = get().pedigree;
+    const missing = normalized.filter(
+      (name) => !existing.some((p) => p.name.toLowerCase() === name.toLowerCase())
+    );
+    if (missing.length === 0) return;
+
+    const toAdd = missing.map((name) => ({ id: generateId(), name }));
+    set((state) => {
+      const next = [...state.pedigree, ...toAdd];
+      savePedigree(next).catch((error) => {
+        console.error('Error saving pedigree:', error);
+      });
+      return { pedigree: next };
+    });
+  },
+
+  ensureOffspringNames: async (names) => {
+    const normalized = Array.from(
+      new Set(names.map((n) => n.trim()).filter(Boolean))
+    );
+    if (normalized.length === 0) return;
+
+    const existing = get().offspring;
+    const missing = normalized.filter(
+      (name) =>
+        !existing.some((o) => o.name.toLowerCase() === name.toLowerCase())
+    );
+    if (missing.length === 0) return;
+
+    const toAdd = missing.map((name) => ({ id: generateId(), name }));
+    set((state) => {
+      const next = [...state.offspring, ...toAdd];
+      saveOffspring(next).catch((error) => {
+        console.error('Error saving offspring:', error);
+      });
+      return { offspring: next };
     });
   },
 
@@ -436,6 +798,160 @@ export const useDomainStore = create<DomainState>((set, get) => ({
     }
   },
 
+  exportHorseBackup: async () => {
+    const { horseCards, pedigree, offspring } = get();
+
+    const backup = {
+      version: 1 as const,
+      exportedAt: Date.now(),
+      horseCards,
+      pedigree,
+      offspring,
+    };
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: 'application/json',
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `horse-backup-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  importHorseBackup: async (data) => {
+    const parsed = HorseBackupSchema.safeParse(data);
+
+    if (!parsed.success) {
+      console.error(parsed.error);
+      return false;
+    }
+
+    const { horseCards, pedigree, offspring } = parsed.data;
+    const normalizedHorseCards = horseCards.map((card) => ({
+      ...card,
+      recentRaces: normalizeRecentRaces(card.recentRaces),
+    }));
+
+    try {
+      await saveHorseCards(normalizedHorseCards);
+      await savePedigree(pedigree ?? []);
+      await saveOffspring(offspring ?? []);
+
+      set({
+        horseCards: normalizedHorseCards,
+        pedigree: pedigree ?? [],
+        offspring: offspring ?? [],
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error importing horse backup:', error);
+      return false;
+    }
+  },
+
+  exportDiagnosisBackup: async () => {
+    const { diagnosisRecords } = get();
+    const payload = { diagnosisRecords };
+
+    const validated = DiagnosisBackupSchema.safeParse(payload);
+    if (!validated.success) {
+      console.error(validated.error);
+      return;
+    }
+
+    const blob = new Blob([JSON.stringify(validated.data, null, 2)], {
+      type: 'application/json',
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `diagnosis-backup-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  importDiagnosisBackup: async (data) => {
+    const parsed = DiagnosisBackupSchema.safeParse(data);
+
+    if (!parsed.success) {
+      const issueMessages = parsed.error.issues.map((issue) => {
+        if (issue.path[0] === 'diagnosisRecords' && issue.code === 'invalid_type') {
+          return 'diagnosisRecords がありません。';
+        }
+        if (issue.path[0] === 'diagnosisRecords' && issue.path[2] === 'id') {
+          return 'id がUUID形式ではありません。';
+        }
+        return 'バックアップの形式が正しくありません。';
+      });
+      return {
+        ok: false,
+        message: issueMessages[0] ?? 'バックアップの形式が正しくありません。',
+      };
+    }
+
+    const { diagnosisRecords } = parsed.data;
+
+    try {
+      await saveDiagnosisRecords(diagnosisRecords);
+      set({ diagnosisRecords });
+      const firstId = diagnosisRecords[0]?.id;
+      return { ok: true, firstId };
+    } catch (error) {
+      console.error('Error importing diagnosis backup:', error);
+      return { ok: false, message: 'バックアップの保存に失敗しました。' };
+    }
+  },
+
+  saveDiagnosisRecord: async ({ id, payload, results }) => {
+    const now = Date.now();
+    const raceInfo = {
+      date: payload.raceInfo.date,
+      course: payload.raceInfo.course,
+      raceName: payload.raceInfo.raceName,
+    };
+
+    const recordId = id ?? generateId();
+
+    set((state) => {
+      const existing = state.diagnosisRecords.find(
+        (item) => item.id === recordId
+      );
+      const nextRecord: DiagnosisRecord = {
+        id: recordId,
+        raceInfo,
+        payload,
+        results,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      const validated = DiagnosisRecordSchema.safeParse(nextRecord);
+      if (!validated.success) {
+        console.error(validated.error);
+        return state;
+      }
+
+      const nextRecords = existing
+        ? state.diagnosisRecords.map((item) =>
+            item.id === recordId ? validated.data : item
+          )
+        : [validated.data, ...state.diagnosisRecords];
+
+      saveDiagnosisRecords(nextRecords).catch((error) => {
+        console.error('Error saving diagnosis records:', error);
+      });
+
+      return { diagnosisRecords: nextRecords };
+    });
+
+    return recordId;
+  },
+
   /**
    * -------- Initialization --------
    */
@@ -447,13 +963,66 @@ export const useDomainStore = create<DomainState>((set, get) => ({
       // データを読み込む
       const labels = await restoreLabels();
       const cards = await restoreCards();
-      const horseCards = await loadHorseCards();
+      const horseCards = (await loadHorseCards()).map((card) => ({
+        ...card,
+        recentRaces: normalizeRecentRaces(card.recentRaces),
+      }));
+      const storedOffspring = await loadOffspring();
+      const storedPedigree = await loadPedigree();
+      const diagnosisRecords = await restoreDiagnosisRecords();
+
+      const pedigreeFromCards = Array.from(
+        new Set(
+          horseCards.flatMap((card) => [card.sire, card.dam, card.damSire])
+        )
+      )
+        .map((name) => name?.trim())
+        .filter((name): name is string => Boolean(name))
+        .map((name) => ({ id: generateId(), name }));
+
+      const offspringFromCards = Array.from(
+        new Set(
+          horseCards.flatMap((card) =>
+            card.offspringNames.map((name) => name.trim()).filter(Boolean)
+          )
+        )
+      ).map((name) => ({ id: generateId(), name }));
+
+      const mergedPedigree = [
+        ...storedPedigree,
+        ...pedigreeFromCards.filter(
+          (item) =>
+            !storedPedigree.some(
+              (p) => p.name.toLowerCase() === item.name.toLowerCase()
+            )
+        ),
+      ];
+
+      const mergedOffspring = [
+        ...storedOffspring,
+        ...offspringFromCards.filter(
+          (item) =>
+            !storedOffspring.some(
+              (o) => o.name.toLowerCase() === item.name.toLowerCase()
+            )
+        ),
+      ];
 
       set({
         labels,
         cards,
         horseCards,
+        pedigree: mergedPedigree,
+        offspring: mergedOffspring,
+        diagnosisRecords,
       });
+
+      if (mergedPedigree.length !== storedPedigree.length) {
+        await savePedigree(mergedPedigree);
+      }
+      if (mergedOffspring.length !== storedOffspring.length) {
+        await saveOffspring(mergedOffspring);
+      }
     } catch (error) {
       console.error('Error initializing store:', error);
     }
